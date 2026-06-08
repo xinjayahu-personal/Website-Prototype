@@ -48,7 +48,7 @@ const FRAME_H = 1024;
 
 const SAVE_GREEN = "#2f9e44";
 
-type Overlay = "home" | "addPage" | "addSection" | "more" | "publish" | null;
+type Overlay = "home" | "addPage" | "addSection" | "more" | "publish" | "quote" | null;
 type LeftView =
   | "landing"
   | "seo"
@@ -245,6 +245,9 @@ export default function App() {
           onSelectProjectOverview={() => setLeftView("projectOverviewEdit")}
           onAddSection={(sectionId) => openAddSection({ mode: "after", sectionId })}
           onMoveSection={moveHomeSection}
+          onOpenQuoteModal={() => {
+            if (!isEditMode) setOverlay("quote");
+          }}
           scrollToSectionId={pendingScrollSectionId}
           onScrollToSectionHandled={() => setPendingScrollSectionId(null)}
           previewPage={previewPage}
@@ -887,6 +890,7 @@ function Canvas({
   onSelectProjectOverview,
   onAddSection,
   onMoveSection,
+  onOpenQuoteModal,
   scrollToSectionId,
   onScrollToSectionHandled,
   previewPage,
@@ -905,6 +909,7 @@ function Canvas({
   onSelectProjectOverview: () => void;
   onAddSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, direction: "up" | "down") => void;
+  onOpenQuoteModal: () => void;
   scrollToSectionId: string | null;
   onScrollToSectionHandled: () => void;
   previewPage: PreviewPage;
@@ -999,7 +1004,7 @@ function Canvas({
 
         {/* Content view */}
         <div className="flex flex-1 items-center justify-center overflow-hidden pb-12">
-          <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1),0px_4px_12px_0px_rgba(0,0,0,0.05)]">
+          <div className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1),0px_4px_12px_0px_rgba(0,0,0,0.05)]">
             {/* Module header */}
             <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border px-6 py-4">
               <div className="flex min-w-0 flex-1 flex-col justify-center">
@@ -1051,9 +1056,11 @@ function Canvas({
                 onSelectProjectOverview={onSelectProjectOverview}
                 onAddSection={onAddSection}
                 onMoveSection={onMoveSection}
+                onOpenQuoteModal={onOpenQuoteModal}
                 homeContent={homeContent}
               />
             </div>
+            {overlay === "quote" && !isEditMode && <QuoteRequestModal onClose={() => setOverlay(null)} />}
           </div>
         </div>
       </div>
@@ -1071,6 +1078,7 @@ function WebsitePreview({
   onSelectProjectOverview,
   onAddSection,
   onMoveSection,
+  onOpenQuoteModal,
   homeContent,
 }: {
   previewPage: PreviewPage;
@@ -1080,6 +1088,7 @@ function WebsitePreview({
   onSelectProjectOverview: () => void;
   onAddSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, direction: "up" | "down") => void;
+  onOpenQuoteModal: () => void;
   homeContent: HomePageContent;
 }) {
   if (previewPage === "projectShowcase") {
@@ -1134,6 +1143,7 @@ function WebsitePreview({
           onAddSection={() => onAddSection(section.id)}
           onMoveUp={() => onMoveSection(section.id, "up")}
           onMoveDown={() => onMoveSection(section.id, "down")}
+          onOpenQuoteModal={onOpenQuoteModal}
           homeContent={homeContent}
         />
       ))}
@@ -1145,6 +1155,7 @@ function EditableSection({
   children,
   className,
   sectionId,
+  editable = true,
   focused = false,
   label,
   onClick,
@@ -1158,6 +1169,7 @@ function EditableSection({
   children: ReactNode;
   className: string;
   sectionId?: string;
+  editable?: boolean;
   focused?: boolean;
   label?: string;
   onClick?: () => void;
@@ -1168,26 +1180,29 @@ function EditableSection({
   canMoveDown?: boolean;
   onEdit?: () => void;
 }) {
+  const isFocused = editable && focused;
+
   return (
     <section
       id={sectionId ? `preview-section-${sectionId}` : undefined}
-      onClick={onClick}
-      className={`group relative shrink-0 ${onClick ? "cursor-pointer" : ""} ${
-        focused ? "overflow-hidden rounded-2xl" : ""
+      onClick={editable ? onClick : undefined}
+      className={`${editable ? "group" : ""} relative shrink-0 ${editable && onClick ? "cursor-pointer" : ""} ${
+        isFocused ? "overflow-hidden rounded-2xl" : ""
       } ${className}`}
     >
-      {focused ? (
-        <FocusedSectionToolbar label={label ?? "Editing Section"} />
-      ) : (
-        <SectionToolbar
-          onAddSection={onAddSection}
-          onMoveUp={onMoveUp}
-          onMoveDown={onMoveDown}
-          canMoveUp={canMoveUp}
-          canMoveDown={canMoveDown}
-          onEdit={onEdit}
-        />
-      )}
+      {editable &&
+        (isFocused ? (
+          <FocusedSectionToolbar label={label ?? "Editing Section"} />
+        ) : (
+          <SectionToolbar
+            onAddSection={onAddSection}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+            canMoveUp={canMoveUp}
+            canMoveDown={canMoveDown}
+            onEdit={onEdit}
+          />
+        ))}
       {children}
     </section>
   );
@@ -1203,6 +1218,7 @@ function HomePreviewSection({
   onAddSection,
   onMoveUp,
   onMoveDown,
+  onOpenQuoteModal,
   homeContent,
 }: {
   section: HomeSection;
@@ -1214,6 +1230,7 @@ function HomePreviewSection({
   onAddSection: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onOpenQuoteModal: () => void;
   homeContent: HomePageContent;
 }) {
   if (section.kind === "hero") {
@@ -1221,6 +1238,7 @@ function HomePreviewSection({
       <EditableSection
         sectionId={section.id}
         className="flex items-stretch justify-center gap-5 bg-brand pl-6"
+        editable={isEditMode}
         focused={focusedSection === "hero"}
         label="Editing Hero Section"
         onClick={isEditMode ? onSelectHero : undefined}
@@ -1242,7 +1260,17 @@ function HomePreviewSection({
           <div className="flex w-full flex-col gap-12">
             <h1 className="font-serif text-[50px] font-bold leading-[1.25] text-white">{homeContent.heroHeading}</h1>
             <p className="text-[20px] leading-[1.25] text-white">{homeContent.heroSubheading}</p>
-            <button className="w-fit rounded-lg bg-white px-6 py-3 text-[16px] font-semibold text-interactive-subtle hover:bg-[#f1f0e9]">
+            <button
+              onClick={
+                !isEditMode
+                  ? (event) => {
+                      event.stopPropagation();
+                      onOpenQuoteModal();
+                    }
+                  : undefined
+              }
+              className="w-fit rounded-lg bg-white px-6 py-3 text-[16px] font-semibold text-interactive-subtle hover:bg-[#f1f0e9]"
+            >
               Get a Quote
             </button>
           </div>
@@ -1259,6 +1287,7 @@ function HomePreviewSection({
       <EditableSection
         sectionId={section.id}
         className="flex items-start justify-between gap-6 overflow-hidden bg-brand-light px-6 py-16"
+        editable={isEditMode}
         onAddSection={onAddSection}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
@@ -1285,6 +1314,7 @@ function HomePreviewSection({
       <EditableSection
         sectionId={section.id}
         className="flex flex-col items-center justify-center gap-12 overflow-hidden bg-brand-light px-12 py-16"
+        editable={isEditMode}
         onAddSection={onAddSection}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
@@ -1312,6 +1342,7 @@ function HomePreviewSection({
       <EditableSection
         sectionId={section.id}
         className="flex flex-col items-start gap-12 overflow-hidden bg-brand-light px-12 py-16"
+        editable={isEditMode}
         onAddSection={onAddSection}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
@@ -1334,6 +1365,7 @@ function HomePreviewSection({
       <EditableSection
         sectionId={section.id}
         className="flex flex-col items-center justify-center gap-12 bg-[#f0f7f9] px-12 py-16"
+        editable={isEditMode}
         onAddSection={onAddSection}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
@@ -1349,6 +1381,7 @@ function HomePreviewSection({
   return (
     <HomeImageGallerySection
       sectionId={section.id}
+      isEditMode={isEditMode}
       onAddSection={onAddSection}
       onMoveUp={onMoveUp}
       onMoveDown={onMoveDown}
@@ -1360,6 +1393,7 @@ function HomePreviewSection({
 
 function HomeImageGallerySection({
   sectionId,
+  isEditMode,
   onAddSection,
   onMoveUp,
   onMoveDown,
@@ -1367,6 +1401,7 @@ function HomeImageGallerySection({
   canMoveDown,
 }: {
   sectionId: string;
+  isEditMode: boolean;
   onAddSection: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -1377,6 +1412,7 @@ function HomeImageGallerySection({
     <EditableSection
       sectionId={sectionId}
       className="bg-[rgba(56,101,118,0.1)] px-12 py-16"
+      editable={isEditMode}
       onAddSection={onAddSection}
       onMoveUp={onMoveUp}
       onMoveDown={onMoveDown}
@@ -1544,6 +1580,7 @@ function ProjectShowcasePreview({
     <div className="w-full shrink-0 overflow-hidden border border-[#dadada] bg-white">
       <EditableSection
         className="flex h-[270px] items-center justify-center overflow-hidden"
+        editable={isEditMode}
         onAddSection={() => onAddSection("projectHero")}
       >
         <img src={projectHero} alt="" className="absolute inset-0 size-full object-cover" />
@@ -1560,6 +1597,7 @@ function ProjectShowcasePreview({
 
       <EditableSection
         className="flex items-start gap-8 bg-white px-12 py-16"
+        editable={isEditMode}
         focused={focusedSection === "projectOverview"}
         label="Editing Project Detail Section"
         onClick={isEditMode ? onSelectProjectOverview : undefined}
@@ -1595,6 +1633,7 @@ function ProjectShowcasePreview({
 
       <EditableSection
         className="bg-[rgba(56,101,118,0.1)] px-12 py-16"
+        editable={isEditMode}
         onAddSection={() => onAddSection("projectGallery")}
       >
         <div className="flex flex-col gap-8 py-4">
@@ -1761,6 +1800,108 @@ function HomeDropdown({
         </button>
       </div>
     </div>
+  );
+}
+
+function QuoteRequestModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 px-8"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="grid w-[760px] overflow-hidden rounded-2xl bg-white shadow-[0px_20px_60px_rgba(0,0,0,0.25)]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quote-request-title"
+      >
+        <div className="flex items-start justify-between gap-6 bg-brand px-8 py-7 text-white">
+          <div className="flex max-w-[520px] flex-col gap-3">
+            <p className="text-[14px] font-semibold uppercase tracking-[0.08em] text-white/75">Landscape Services</p>
+            <h2 id="quote-request-title" className="font-serif text-[34px] font-bold leading-[1.12]">
+              Request a quote
+            </h2>
+            <p className="text-[16px] leading-[1.35] text-white/85">
+              Tell us a little about your outdoor project and we’ll follow up with next steps.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 transition-colors hover:bg-white/20"
+            aria-label="Close quote request"
+          >
+            <CloseIcon size={22} color="#ffffff" />
+          </button>
+        </div>
+
+        <form
+          className="grid grid-cols-2 gap-4 bg-[#fbfaf6] p-8"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onClose();
+          }}
+        >
+          <QuoteField label="First name" placeholder="Jane" />
+          <QuoteField label="Last name" placeholder="Smith" />
+          <QuoteField label="Email" placeholder="jane@example.com" type="email" />
+          <QuoteField label="Phone" placeholder="604-555-1234" type="tel" />
+
+          <label className="col-span-2 flex flex-col gap-2">
+            <span className="text-[14px] font-bold leading-[1.25] text-heading">What service are you interested in?</span>
+            <select className="h-12 rounded-lg border border-border bg-white px-4 text-[14px] text-interactive-subtle outline-none transition-colors focus:border-interactive">
+              <option>Landscape design</option>
+              <option>Lawn care</option>
+              <option>Clean up and mulching</option>
+              <option>Hardscaping</option>
+            </select>
+          </label>
+
+          <label className="col-span-2 flex flex-col gap-2">
+            <span className="text-[14px] font-bold leading-[1.25] text-heading">Project details</span>
+            <textarea
+              placeholder="Tell us about your yard, timeline, and anything you already have in mind."
+              className="min-h-[116px] resize-none rounded-lg border border-border bg-white px-4 py-3 text-[14px] leading-[1.4] text-interactive-subtle outline-none transition-colors placeholder:text-secondary focus:border-interactive"
+            />
+          </label>
+
+          <div className="col-span-2 flex items-center justify-between gap-6 pt-2">
+            <div className="flex items-center gap-2 text-[14px] font-semibold text-interactive-subtle">
+              <PhoneIcon size={18} />
+              604-555-1234
+            </div>
+            <button
+              type="submit"
+              className="h-12 rounded-lg bg-heading px-8 text-[16px] font-semibold text-white transition-colors hover:bg-[#063546]"
+            >
+              Send request
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function QuoteField({
+  label,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  placeholder: string;
+  type?: string;
+}) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-[14px] font-bold leading-[1.25] text-heading">{label}</span>
+      <input
+        type={type}
+        placeholder={placeholder}
+        className="h-12 rounded-lg border border-border bg-white px-4 text-[14px] text-interactive-subtle outline-none transition-colors placeholder:text-secondary focus:border-interactive"
+      />
+    </label>
   );
 }
 
