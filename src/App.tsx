@@ -46,7 +46,7 @@ import {
 const FRAME_W = 1440;
 const FRAME_H = 1024;
 
-const SAVE_GREEN = "#2f9e44";
+const SAVE_GREEN = "#388523";
 
 type Overlay = "home" | "addPage" | "addSection" | "more" | "publish" | "quote" | null;
 type LeftView =
@@ -429,13 +429,13 @@ function LandingPanel({
       {/* Footer */}
       <div className="flex w-[412px] shrink-0 flex-col px-6 pb-8 pt-4">
         <div className="relative flex h-12 items-center justify-end">
-          <button className="flex h-12 items-center rounded-l-lg bg-heading px-5 text-[14px] font-semibold text-white transition-colors hover:bg-[#063546]">
+          <button className="flex h-12 items-center rounded-l-lg bg-interactive px-5 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]">
             Publish Website
           </button>
           <div className="ml-px">
             <button
               onClick={onPublishMenu}
-              className="flex h-12 items-center justify-center rounded-r-lg bg-heading px-2 transition-colors hover:bg-[#063546]"
+              className="flex h-12 items-center justify-center rounded-r-lg bg-interactive px-2 transition-colors hover:bg-[#2f7d20]"
             >
               <ChevronDownIcon size={20} color="#ffffff" />
             </button>
@@ -977,7 +977,7 @@ function Canvas({
                   </button>
                   <button
                     onClick={onSaveEdit}
-                    className="flex h-10 items-center rounded-lg bg-heading px-6 text-[14px] font-semibold text-white transition-colors hover:bg-[#063546]"
+                    className="flex h-10 items-center rounded-lg bg-interactive px-6 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]"
                   >
                     Save
                   </button>
@@ -1121,7 +1121,7 @@ function WebsitePreview({
             <button className="rounded-lg border border-border bg-white px-4 py-2 text-[14px] font-semibold text-interactive-subtle hover:bg-surface-subtle">
               Client Login
             </button>
-            <button className="rounded-lg bg-heading px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#063546]">
+            <button className="rounded-lg bg-interactive px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#2f7d20]">
               Get a Quote
             </button>
           </div>
@@ -1269,7 +1269,7 @@ function HomePreviewSection({
                     }
                   : undefined
               }
-              className="w-fit rounded-lg bg-white px-6 py-3 text-[16px] font-semibold text-interactive-subtle hover:bg-[#f1f0e9]"
+              className="w-fit rounded-lg bg-interactive px-6 py-3 text-[16px] font-semibold text-white hover:bg-[#2f7d20]"
             >
               Get a Quote
             </button>
@@ -1330,7 +1330,7 @@ function HomePreviewSection({
           <ServiceListItem title="Native plants" />
           <ServiceListItem title="Water features" />
         </div>
-        <button className="rounded-sm bg-brand px-4 py-2 text-[14px] font-semibold leading-[1.25] text-white hover:bg-brand-hover">
+        <button className="rounded-sm bg-interactive px-4 py-2 text-[14px] font-semibold leading-[1.25] text-white hover:bg-[#2f7d20]">
           Get a Quote
         </button>
       </EditableSection>
@@ -1873,7 +1873,7 @@ function QuoteRequestModal({ onClose }: { onClose: () => void }) {
             </div>
             <button
               type="submit"
-              className="h-12 rounded-lg bg-heading px-8 text-[16px] font-semibold text-white transition-colors hover:bg-[#063546]"
+              className="h-12 rounded-lg bg-interactive px-8 text-[16px] font-semibold text-white transition-colors hover:bg-[#2f7d20]"
             >
               Send request
             </button>
