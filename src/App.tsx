@@ -663,7 +663,7 @@ function AIEditDrawer({
                   text: "Done — I\u2019ve updated the page with your description and linked it under your Services menu. Want to add anything else here, like photos, pricing, or a contact form?",
                   summary: {
                     title: "Updated page content",
-                    detail: '"Maintenance Plans" \u2192 description + Services menu link',
+                    detail: '"Lawn mowing" \u2192 description + Services menu link',
                     view: { type: "page", page: "lawnMowing" },
                   },
                 }
