@@ -61,10 +61,11 @@ type LeftView =
   | "edit"
   | "heroEdit"
   | "projectEdit"
-  | "projectOverviewEdit"
-  | "aiEdit";
+  | "projectOverviewEdit";
 
-type AiSummary = { title: string; before: string; after: string; sectionId: string };
+type AiDrawerState = "closed" | "expanded" | "collapsed";
+
+type AiSummary = { title: string; before: string; after: string; sectionId: string; description?: string };
 type AiMessage =
   | { id: string; role: "user"; text: string }
   | { id: string; role: "thinking" }
@@ -141,6 +142,7 @@ export default function App() {
   const [previewPage, setPreviewPage] = useState<PreviewPage>("home");
   const [hasLawnMowingPage, setHasLawnMowingPage] = useState(false);
   const [aiInitialPrompt, setAiInitialPrompt] = useState("");
+  const [aiDrawerState, setAiDrawerState] = useState<AiDrawerState>("closed");
   const [showExitEditConfirm, setShowExitEditConfirm] = useState(false);
   const [savedHomeContent, setSavedHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
   const [draftHomeContent, setDraftHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
@@ -153,7 +155,7 @@ export default function App() {
     leftView === "heroEdit" ||
     leftView === "projectEdit" ||
     leftView === "projectOverviewEdit";
-  const isAiEdit = leftView === "aiEdit";
+  const isAiEdit = aiDrawerState !== "closed";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOverlay(null);
@@ -177,8 +179,10 @@ export default function App() {
   const startAiEdit = (prompt: string) => {
     setAiInitialPrompt(prompt);
     setOverlay(null);
-    setLeftView("aiEdit");
+    setAiDrawerState("expanded");
   };
+  const toggleAiDrawer = () =>
+    setAiDrawerState((s) => (s === "collapsed" ? "expanded" : "collapsed"));
   const applyAiHeroSubheading = (value: string) => {
     setSavedHomeContent((c) => ({ ...c, heroSubheading: value }));
     setDraftHomeContent((c) => ({ ...c, heroSubheading: value }));
@@ -282,11 +286,6 @@ export default function App() {
           homeContent={draftHomeContent}
           onHomeContentChange={(patch) => setDraftHomeContent((current) => ({ ...current, ...patch }))}
           onStartAiEdit={startAiEdit}
-          aiInitialPrompt={aiInitialPrompt}
-          currentHeroSubheading={savedHomeContent.heroSubheading}
-          onApplyAiHeroSubheading={applyAiHeroSubheading}
-          onViewAiChange={viewAiChange}
-          onCloseAiEdit={() => setLeftView("landing")}
         />
         <Canvas
           overlay={overlay}
@@ -337,6 +336,18 @@ export default function App() {
             }}
           />
         )}
+
+        {/* AI edit drawer (pulls up over the left panel) */}
+        {aiDrawerState !== "closed" && (
+          <AIEditDrawer
+            collapsed={aiDrawerState === "collapsed"}
+            onToggleCollapsed={toggleAiDrawer}
+            initialPrompt={aiInitialPrompt}
+            currentHeroSubheading={savedHomeContent.heroSubheading}
+            onApplyHeroSubheading={applyAiHeroSubheading}
+            onViewChange={viewAiChange}
+          />
+        )}
       </div>
     </div>
   );
@@ -352,11 +363,6 @@ function Sidebar({
   homeContent,
   onHomeContentChange,
   onStartAiEdit,
-  aiInitialPrompt,
-  currentHeroSubheading,
-  onApplyAiHeroSubheading,
-  onViewAiChange,
-  onCloseAiEdit,
 }: {
   leftView: LeftView;
   setLeftView: (v: LeftView) => void;
@@ -365,26 +371,7 @@ function Sidebar({
   homeContent: HomePageContent;
   onHomeContentChange: (patch: Partial<HomePageContent>) => void;
   onStartAiEdit: (prompt: string) => void;
-  aiInitialPrompt: string;
-  currentHeroSubheading: string;
-  onApplyAiHeroSubheading: (value: string) => void;
-  onViewAiChange: (sectionId: string) => void;
-  onCloseAiEdit: () => void;
 }) {
-  if (leftView === "aiEdit") {
-    return (
-      <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
-        <AIEditPanel
-          initialPrompt={aiInitialPrompt}
-          currentHeroSubheading={currentHeroSubheading}
-          onApplyHeroSubheading={onApplyAiHeroSubheading}
-          onViewChange={onViewAiChange}
-          onClose={onCloseAiEdit}
-        />
-      </div>
-    );
-  }
-
   if (leftView === "edit") {
     return (
       <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
@@ -535,7 +522,7 @@ function LandingPanel({
                   submitAiPrompt();
                 }
               }}
-              placeholder="Make the homepage headline more welcoming"
+              placeholder="tell us what you want to change"
               className="min-w-0 flex-1 bg-transparent text-[14px] text-heading outline-none placeholder:text-secondary"
             />
             <button type="button" className="flex size-6 items-center justify-center" aria-label="Voice input">
@@ -568,18 +555,20 @@ function LandingPanel({
   );
 }
 
-function AIEditPanel({
+function AIEditDrawer({
+  collapsed,
+  onToggleCollapsed,
   initialPrompt,
   currentHeroSubheading,
   onApplyHeroSubheading,
   onViewChange,
-  onClose,
 }: {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   initialPrompt: string;
   currentHeroSubheading: string;
   onApplyHeroSubheading: (value: string) => void;
   onViewChange: (sectionId: string) => void;
-  onClose: () => void;
 }) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -656,137 +645,148 @@ function AIEditPanel({
   const submitDraft = () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
+    if (collapsed) onToggleCollapsed();
     runPrompt(trimmed);
     setDraft("");
   };
 
-  return (
-    <>
-      {/* Dimmed breadcrumb */}
-      <div className="flex w-[412px] shrink-0 items-center gap-4 px-6 pb-6 pt-8 opacity-50">
-        <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface">
-          <CloseIcon size={20} />
-        </div>
-        <p className="text-[14px] leading-[1.25] text-secondary">
-          Website / <span className="text-heading">Setup</span>
-        </p>
-      </div>
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant") as
+    | Extract<AiMessage, { role: "assistant" }>
+    | undefined;
+  const isThinking = messages.some((m) => m.role === "thinking");
+  const headerText = isThinking
+    ? "Thinking..."
+    : lastAssistant?.text ?? "Tell us what you'd like to change";
 
-      {/* AI edit header */}
-      <div className="flex shrink-0 items-start justify-between border-b border-surface-bg px-6 pb-4">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-[16px] font-bold leading-[1.2] text-heading">AI edit</h3>
-          <button className="text-left text-[13px] leading-[1.25] text-interactive underline">
-            How does AI help you?
-          </button>
-        </div>
+  return (
+    <div
+      className={`absolute bottom-0 left-0 z-30 flex w-[415px] flex-col rounded-t-2xl border border-border bg-surface shadow-[0px_-10px_30px_0px_rgba(0,0,0,0.14)] transition-[height] duration-300 ease-out ${
+        collapsed ? "h-[196px]" : "h-[640px]"
+      }`}
+    >
+      {/* Drag handle */}
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        className="flex h-6 w-full shrink-0 cursor-grab items-center justify-center pt-2 active:cursor-grabbing"
+        aria-label={collapsed ? "Expand AI edit" : "Collapse AI edit"}
+      >
+        <span className="h-1.5 w-9 rounded-full bg-[#c9d1d6]" />
+      </button>
+
+      {/* Header */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-surface-bg px-5 pb-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#e6f3e1]">
+          <SparkleIcon size={18} color="#388523" />
+        </span>
+        <p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-[1.3] text-heading">
+          {headerText}
+        </p>
         <button
-          onClick={onClose}
-          className="flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-subtle"
-          aria-label="Collapse AI edit"
+          type="button"
+          onClick={onToggleCollapsed}
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-surface-subtle"
+          aria-label={collapsed ? "Expand AI edit" : "Collapse AI edit"}
         >
-          <ChevronDownIcon size={20} />
+          <ChevronDownIcon size={20} className={collapsed ? "rotate-180" : ""} />
         </button>
       </div>
 
-      {/* Conversation */}
-      <div ref={scrollRef} className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-        {messages.map((m) => {
-          if (m.role === "user") {
+      {/* Conversation (expanded only) */}
+      {!collapsed && (
+        <div ref={scrollRef} className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
+          {messages.map((m) => {
+            if (m.role === "user") {
+              return (
+                <div key={m.id} className="w-full rounded-lg bg-[#d6ecfb] px-3 py-2 text-[14px] leading-[1.3] text-heading">
+                  {m.text}
+                </div>
+              );
+            }
+            if (m.role === "thinking") {
+              return (
+                <div key={m.id} className="flex items-center gap-2 text-[14px] leading-[1.3] text-secondary">
+                  <SparkleIcon size={18} />
+                  <span>Thinking...</span>
+                </div>
+              );
+            }
             return (
-              <div key={m.id} className="w-full rounded-lg bg-[#d6ecfb] px-3 py-2 text-[14px] leading-[1.3] text-heading">
-                {m.text}
+              <div key={m.id} className="flex flex-col gap-3">
+                <div className="flex gap-2">
+                  <SparkleIcon size={18} className="mt-0.5 shrink-0" />
+                  <p className="text-[14px] leading-[1.4] text-heading">{m.text}</p>
+                </div>
+                {m.summary && (
+                  <>
+                    <AiChangeSummaryCard summary={m.summary} onView={() => onViewChange(m.summary!.sectionId)} />
+                    <div className="flex items-center gap-3 pl-6">
+                      <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Helpful">
+                        <ThumbsUpIcon size={18} />
+                      </button>
+                      <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Not helpful">
+                        <ThumbsDownIcon size={18} />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             );
-          }
-          if (m.role === "thinking") {
-            return (
-              <div key={m.id} className="flex items-center gap-2 text-[14px] leading-[1.3] text-secondary">
-                <SparkleIcon size={18} />
-                <span>Thinking...</span>
-              </div>
-            );
-          }
-          return (
-            <div key={m.id} className="flex flex-col gap-3">
-              <div className="flex gap-2">
-                <SparkleIcon size={18} className="mt-0.5 shrink-0" />
-                <p className="text-[14px] leading-[1.4] text-heading">{m.text}</p>
-              </div>
-              {m.summary && (
-                <>
-                  <AiChangeSummaryCard summary={m.summary} onView={() => onViewChange(m.summary!.sectionId)} />
-                  <div className="flex items-center gap-3 pl-6">
-                    <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Helpful">
-                      <ThumbsUpIcon size={18} />
-                    </button>
-                    <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Not helpful">
-                      <ThumbsDownIcon size={18} />
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* Composer */}
-      <div className="shrink-0 px-6 pt-2">
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submitDraft();
-              }
-            }}
-            placeholder="Describe what you'd like updated or added"
-            className="h-12 w-full resize-none bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
-          />
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              className="flex size-9 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
-              aria-label="Add attachment"
-            >
-              <PlusIcon size={18} color="#032B3A" />
+      <div className="shrink-0 px-5 pb-5 pt-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-12 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-4">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitDraft();
+                }
+              }}
+              placeholder="Describe what you'd like updated or added"
+              className="min-w-0 flex-1 bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
+            />
+            <button type="button" className="flex size-7 shrink-0 items-center justify-center" aria-label="Voice input">
+              <MicIcon size={18} />
             </button>
-            <div className="flex items-center gap-2">
-              <button type="button" className="flex size-9 items-center justify-center" aria-label="Voice input">
-                <MicIcon size={18} />
-              </button>
-              <button
-                type="button"
-                onClick={submitDraft}
-                className="flex size-9 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
-                aria-label="Send"
-              >
-                <ArrowUpIcon size={18} />
-              </button>
-            </div>
           </div>
-        </div>
-        <p className="px-1 pt-2 text-[12px] leading-[1.25] text-secondary">
-          AI can make mistakes. Check important info. <span className="font-semibold text-heading">Learn more.</span>
-        </p>
-      </div>
-
-      {/* Footer */}
-      <div className="flex w-[412px] shrink-0 flex-col px-6 pb-8 pt-4">
-        <div className="relative flex h-12 items-center justify-end">
-          <button className="flex h-12 items-center rounded-lg bg-interactive px-5 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]">
-            Publish Website
+          <button
+            type="button"
+            onClick={submitDraft}
+            className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+            aria-label="Send"
+          >
+            <ArrowUpIcon size={20} />
           </button>
         </div>
+        {!collapsed && (
+          <p className="px-1 pt-2 text-[12px] leading-[1.25] text-secondary">
+            AI can make mistakes. Check important info. <span className="font-semibold text-heading">Learn more.</span>
+          </p>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
+function getAiChangeSummaryText(summary: AiSummary) {
+  const fullDiff = `“${summary.before}” → “${summary.after}”`;
+  const isLargeTextChange = summary.before.length + summary.after.length > 240;
+
+  if (!isLargeTextChange) return fullDiff;
+
+  return summary.description ?? "Updated the selected website copy with a clearer version.";
+}
+
 function AiChangeSummaryCard({ summary, onView }: { summary: AiSummary; onView: () => void }) {
+  const summaryText = getAiChangeSummaryText(summary);
+
   return (
     <div className="ml-6 flex items-start gap-3 rounded-lg border border-border bg-surface p-3 shadow-[0px_1px_4px_rgba(0,0,0,0.06)]">
       <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#0f8da5]">
@@ -794,8 +794,11 @@ function AiChangeSummaryCard({ summary, onView }: { summary: AiSummary; onView: 
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="text-[14px] font-bold leading-[1.2] text-heading">{summary.title}</p>
-        <p className="text-[12px] leading-[1.35] text-secondary">
-          “{summary.before}” → “{summary.after}”
+        <p
+          className="overflow-hidden text-[12px] leading-[1.35] text-secondary"
+          style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 3 }}
+        >
+          {summaryText}
         </p>
       </div>
       <button
