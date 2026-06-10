@@ -65,15 +65,36 @@ type LeftView =
 
 type AiDrawerState = "closed" | "expanded" | "collapsed";
 
-type AiSummary = { title: string; before: string; after: string; sectionId: string; description?: string };
+type AiView = { type: "section"; sectionId: string } | { type: "seoSettings" };
+type AiSummary = {
+  title: string;
+  view: AiView;
+  before?: string;
+  after?: string;
+  detail?: string;
+  description?: string;
+};
 type AiMessage =
   | { id: string; role: "user"; text: string }
   | { id: string; role: "thinking" }
   | { id: string; role: "assistant"; text: string; summary?: AiSummary };
 
+type AiScenario = "heroSubtitle" | "seo";
+
 /* Scripted scenario matcher for the mocked AI editor. */
-function matchAiScenario(prompt: string): "heroSubtitle" | null {
+function matchAiScenario(prompt: string): AiScenario | null {
   const p = prompt.toLowerCase();
+  if (
+    p.includes("seo") ||
+    p.includes("search engine") ||
+    p.includes("rank") ||
+    p.includes("found on google") ||
+    p.includes("find my site") ||
+    p.includes("easier to find") ||
+    p.includes("discoverab")
+  ) {
+    return "seo";
+  }
   if (
     p.includes("subtitle") ||
     p.includes("subheading") ||
@@ -192,9 +213,14 @@ export default function App() {
     setDraftHomeContent((c) => ({ ...c, heroSubheading: value }));
     window.setTimeout(() => setAiApplyingSectionId(null), 1800);
   };
-  const viewAiChange = (sectionId: string) => {
+  const viewAiChange = (view: AiView) => {
+    if (view.type === "seoSettings") {
+      setLeftView("seo");
+      setAiDrawerState("collapsed");
+      return;
+    }
     setPreviewPage("home");
-    setPendingScrollSectionId(sectionId);
+    setPendingScrollSectionId(view.sectionId);
   };
   const beginEditMode = () => {
     setDraftHomeContent(savedHomeContent);
@@ -351,7 +377,7 @@ export default function App() {
             initialPrompt={aiInitialPrompt}
             currentHeroSubheading={savedHomeContent.heroSubheading}
             onApplyHeroSubheading={applyAiHeroSubheading}
-            onViewChange={viewAiChange}
+            onView={viewAiChange}
           />
         )}
       </div>
@@ -567,14 +593,14 @@ function AIEditDrawer({
   initialPrompt,
   currentHeroSubheading,
   onApplyHeroSubheading,
-  onViewChange,
+  onView,
 }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   initialPrompt: string;
   currentHeroSubheading: string;
   onApplyHeroSubheading: (value: string) => void;
-  onViewChange: (sectionId: string) => void;
+  onView: (view: AiView) => void;
 }) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -610,7 +636,24 @@ function AIEditDrawer({
                   id: thinkingId,
                   role: "assistant",
                   text: "Done. I updated the text under your homepage headline to mention your free quotes.",
-                  summary: { title: "Updated hero text", before, after, sectionId: "hero" },
+                  summary: { title: "Updated hero text", before, after, view: { type: "section", sectionId: "hero" } },
+                }
+              : m,
+          ),
+        );
+      } else if (scenario === "seo") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: 'Done. I improved your site\u2019s search basics \u2014 I added a clearer page title and description, and worked your main services and city into your homepage so you\u2019re easier to find for \u201Clandscaping in [City].\u201D You can fine-tune these anytime under SEO and Discovery in your settings.',
+                  summary: {
+                    title: "Updated search settings",
+                    detail: "Page title \u00B7 meta description \u00B7 homepage keywords",
+                    view: { type: "seoSettings" },
+                  },
                 }
               : m,
           ),
@@ -723,7 +766,7 @@ function AIEditDrawer({
                 </div>
                 {m.summary && (
                   <>
-                    <AiChangeSummaryCard summary={m.summary} onView={() => onViewChange(m.summary!.sectionId)} />
+                    <AiChangeSummaryCard summary={m.summary} onView={() => onView(m.summary!.view)} />
                     <div className="flex items-center gap-3 pl-6">
                       <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Helpful">
                         <ThumbsUpIcon size={18} />
@@ -780,8 +823,12 @@ function AIEditDrawer({
 }
 
 function getAiChangeSummaryText(summary: AiSummary) {
-  const fullDiff = `“${summary.before}” → “${summary.after}”`;
-  const isLargeTextChange = summary.before.length + summary.after.length > 240;
+  if (summary.detail) return summary.detail;
+
+  const before = summary.before ?? "";
+  const after = summary.after ?? "";
+  const fullDiff = `“${before}” → “${after}”`;
+  const isLargeTextChange = before.length + after.length > 240;
 
   if (!isLargeTextChange) return fullDiff;
 
