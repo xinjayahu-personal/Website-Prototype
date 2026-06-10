@@ -22,6 +22,12 @@ import projectGallery2 from "./assets/project-gallery-2.png";
 import projectGallery3 from "./assets/project-gallery-3.png";
 import projectGallery4 from "./assets/project-gallery-4.png";
 import projectGallery5 from "./assets/project-gallery-5.png";
+import teamPhoto1 from "./assets/team-1.jpg";
+import teamPhoto2 from "./assets/team-2.jpg";
+import teamPhoto3 from "./assets/team-3.jpg";
+import teamPhoto4 from "./assets/team-4.jpg";
+import teamPhoto5 from "./assets/team-5.jpg";
+import teamPhoto6 from "./assets/team-6.jpg";
 
 import {
   CloseIcon,
@@ -144,7 +150,7 @@ type HomeSection = {
 };
 
 /* Placeholder "team" photos staged when a user uploads via the AI uploader. */
-const TEAM_PHOTO_POOL = [serviceCard1, serviceCard2, serviceCard4, projectGallery3, house3Img, projectGallery1];
+const TEAM_PHOTO_POOL = [teamPhoto1, teamPhoto2, teamPhoto3, teamPhoto4, teamPhoto5, teamPhoto6];
 type HomePageContent = {
   heroHeading: string;
   heroSubheading: string;
@@ -997,76 +1003,52 @@ function AIEditDrawer({
 
       {/* Composer */}
       <div className="relative shrink-0 px-5 pb-5 pt-3">
-        {stagedImages.length > 0 ? (
-          <>
-            <div className="flex flex-wrap gap-2 pb-3">
+        {stagedImages.length > 0 && (
+          <div className="pb-3">
+            <div className="flex flex-wrap gap-2">
               {stagedImages.map((src, i) => (
                 <img key={i} src={src} alt="" className="size-[68px] rounded-lg object-cover" />
               ))}
             </div>
-            <p className="pb-2 text-[14px] font-medium text-heading">Add these</p>
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setShowUploader(true)}
-                className="flex size-12 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
-                aria-label="Add more images"
-              >
-                <PlusIcon size={20} color="#032B3A" />
-              </button>
-              <div className="flex items-center gap-2">
-                <button type="button" className="flex size-12 items-center justify-center rounded-lg border border-border bg-surface" aria-label="Voice input">
-                  <MicIcon size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={onSend}
-                  className="flex size-12 items-center justify-center rounded-lg bg-surface-subtle transition-colors hover:bg-[#e4e8ea]"
-                  aria-label="Send"
-                >
-                  <ArrowUpIcon size={20} />
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowUploader(true)}
-              className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
-              aria-label="Upload images"
-            >
-              <PlusIcon size={20} color="#032B3A" />
-            </button>
-            <div className="flex h-12 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-4">
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    submitDraft();
-                  }
-                }}
-                placeholder="Describe what you'd like updated or added"
-                className="min-w-0 flex-1 bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
-              />
-              <button type="button" className="flex size-7 shrink-0 items-center justify-center" aria-label="Voice input">
-                <MicIcon size={18} />
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={onSend}
-              className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
-              aria-label="Send"
-            >
-              <ArrowUpIcon size={20} />
-            </button>
+            <p className="pt-2 text-[14px] font-medium text-heading">Add these</p>
           </div>
         )}
-        {!collapsed && stagedImages.length === 0 && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowUploader(true)}
+            className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+            aria-label={stagedImages.length > 0 ? "Add more images" : "Upload images"}
+          >
+            <PlusIcon size={20} color="#032B3A" />
+          </button>
+          <div className="flex h-12 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-4">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onSend();
+                }
+              }}
+              placeholder={stagedImages.length > 0 ? "Add a message (optional)" : "Describe what you'd like updated or added"}
+              className="min-w-0 flex-1 bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
+            />
+            <button type="button" className="flex size-7 shrink-0 items-center justify-center" aria-label="Voice input">
+              <MicIcon size={18} />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onSend}
+            className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+            aria-label="Send"
+          >
+            <ArrowUpIcon size={20} />
+          </button>
+        </div>
+        {!collapsed && (
           <p className="px-1 pt-2 text-[12px] leading-[1.25] text-secondary">
             AI can make mistakes. Check important info. <span className="font-semibold text-heading">Learn more.</span>
           </p>
