@@ -48,7 +48,7 @@ const FRAME_H = 1024;
 
 const SAVE_GREEN = "#388523";
 
-type Overlay = "home" | "addPage" | "addSection" | "more" | "publish" | "quote" | null;
+type Overlay = "home" | "addPage" | "addSection" | "servicePagePrompt" | "more" | "quote" | null;
 type LeftView =
   | "landing"
   | "seo"
@@ -59,7 +59,7 @@ type LeftView =
   | "heroEdit"
   | "projectEdit"
   | "projectOverviewEdit";
-type PreviewPage = "home" | "projectShowcase";
+type PreviewPage = "home" | "projectShowcase" | "lawnMowing";
 type HomeSectionKind = "hero" | "featured" | "servicesList" | "serviceCards" | "quote" | "imageGallery";
 type HomeSection = {
   id: string;
@@ -107,6 +107,7 @@ export default function App() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [leftView, setLeftView] = useState<LeftView>("landing");
   const [previewPage, setPreviewPage] = useState<PreviewPage>("home");
+  const [hasLawnMowingPage, setHasLawnMowingPage] = useState(false);
   const [showExitEditConfirm, setShowExitEditConfirm] = useState(false);
   const [savedHomeContent, setSavedHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
   const [draftHomeContent, setDraftHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
@@ -132,6 +133,12 @@ export default function App() {
     if (isEditMode) {
       setLeftView(page === "projectShowcase" ? "projectEdit" : "edit");
     }
+  };
+  const createLawnMowingPage = () => {
+    setHasLawnMowingPage(true);
+    setPreviewPage("lawnMowing");
+    setLeftView("edit");
+    setOverlay(null);
   };
   const beginEditMode = () => {
     setDraftHomeContent(savedHomeContent);
@@ -225,8 +232,6 @@ export default function App() {
           setLeftView={setLeftView}
           onRequestExitEdit={() => setShowExitEditConfirm(true)}
           onAddSection={() => openAddSection({ mode: "append" })}
-          onPublishMenu={() => toggle("publish")}
-          publishOpen={overlay === "publish"}
           homeContent={draftHomeContent}
           onHomeContentChange={(patch) => setDraftHomeContent((current) => ({ ...current, ...patch }))}
         />
@@ -252,11 +257,21 @@ export default function App() {
           onScrollToSectionHandled={() => setPendingScrollSectionId(null)}
           previewPage={previewPage}
           onPreviewPageChange={handlePreviewPageChange}
+          hasLawnMowingPage={hasLawnMowingPage}
           homeContent={isEditMode ? draftHomeContent : savedHomeContent}
         />
 
         {/* Add page modal (triggered by + beside Home dropdown) */}
-        {overlay === "addPage" && <AddPageModal onClose={() => setOverlay(null)} />}
+        {overlay === "addPage" && (
+          <AddPageModal onClose={() => setOverlay(null)} onSelectService={() => setOverlay("servicePagePrompt")} />
+        )}
+        {overlay === "servicePagePrompt" && (
+          <ServicePagePromptModal
+            onBack={() => setOverlay("addPage")}
+            onClose={() => setOverlay(null)}
+            onCreatePage={createLawnMowingPage}
+          />
+        )}
         {overlay === "addSection" && (
           <AddSectionModal onClose={() => setOverlay(null)} onSelectImageGallery={addImageGallerySection} />
         )}
@@ -280,8 +295,6 @@ function Sidebar({
   setLeftView,
   onRequestExitEdit,
   onAddSection,
-  onPublishMenu,
-  publishOpen,
   homeContent,
   onHomeContentChange,
 }: {
@@ -289,8 +302,6 @@ function Sidebar({
   setLeftView: (v: LeftView) => void;
   onRequestExitEdit: () => void;
   onAddSection: () => void;
-  onPublishMenu: () => void;
-  publishOpen: boolean;
   homeContent: HomePageContent;
   onHomeContentChange: (patch: Partial<HomePageContent>) => void;
 }) {
@@ -342,7 +353,7 @@ function Sidebar({
   return (
     <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
       {leftView === "landing" ? (
-        <LandingPanel onOpen={setLeftView} onPublishMenu={onPublishMenu} publishOpen={publishOpen} />
+        <LandingPanel onOpen={setLeftView} />
       ) : (
         <ToolView view={leftView} onBack={() => setLeftView("landing")} />
       )}
@@ -350,14 +361,8 @@ function Sidebar({
   );
 }
 
-function LandingPanel({
-  onOpen,
-  onPublishMenu,
-  publishOpen,
-}: {
+function LandingPanel({ onOpen }: {
   onOpen: (v: LeftView) => void;
-  onPublishMenu: () => void;
-  publishOpen: boolean;
 }) {
   return (
     <>
@@ -429,23 +434,9 @@ function LandingPanel({
       {/* Footer */}
       <div className="flex w-[412px] shrink-0 flex-col px-6 pb-8 pt-4">
         <div className="relative flex h-12 items-center justify-end">
-          <button className="flex h-12 items-center rounded-l-lg bg-interactive px-5 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]">
+          <button className="flex h-12 items-center rounded-lg bg-interactive px-5 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]">
             Publish Website
           </button>
-          <div className="ml-px">
-            <button
-              onClick={onPublishMenu}
-              className="flex h-12 items-center justify-center rounded-r-lg bg-interactive px-2 transition-colors hover:bg-[#2f7d20]"
-            >
-              <ChevronDownIcon size={20} color="#ffffff" />
-            </button>
-          </div>
-
-          {publishOpen && (
-            <div className="absolute bottom-full right-0 z-30 mb-2 w-[220px] rounded-lg border border-border bg-surface p-2 shadow-[0px_4px_6px_rgba(0,0,0,0.08),0px_1px_2px_rgba(0,0,0,0.1)]">
-              <MenuRow icon={<CheckIcon size={22} />} label="Save draft" />
-            </div>
-          )}
         </div>
       </div>
     </>
@@ -895,6 +886,7 @@ function Canvas({
   onScrollToSectionHandled,
   previewPage,
   onPreviewPageChange,
+  hasLawnMowingPage,
   homeContent,
 }: {
   overlay: Overlay;
@@ -914,6 +906,7 @@ function Canvas({
   onScrollToSectionHandled: () => void;
   previewPage: PreviewPage;
   onPreviewPageChange: (page: PreviewPage) => void;
+  hasLawnMowingPage: boolean;
   homeContent: HomePageContent;
 }) {
   const previewScrollRef = useRef<HTMLDivElement>(null);
@@ -1006,42 +999,45 @@ function Canvas({
         <div className="flex flex-1 items-center justify-center overflow-hidden pb-12">
           <div className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1),0px_4px_12px_0px_rgba(0,0,0,0.05)]">
             {/* Module header */}
-            <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border px-6 py-4">
-              <div className="flex min-w-0 flex-1 flex-col justify-center">
-                <p className="truncate text-[14px] leading-[1.25] text-heading">
-                  <span className="font-bold">Website:</span> landscapeservices.jobbersite.com
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Home select -> dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => toggle("home")}
-                    className="flex h-9 items-center gap-2 rounded-lg border border-border bg-surface pl-3 pr-2 text-[14px] text-heading transition-colors hover:bg-surface-subtle"
-                  >
-                    {previewPage === "home" ? "Home" : "Project showcase"}
-                    <ChevronDownIcon size={18} />
-                  </button>
-                  {overlay === "home" && (
-                    <HomeDropdown
-                      selectedPage={previewPage}
-                      onSelectPage={(page) => {
-                        onPreviewPageChange(page);
-                        setOverlay(null);
-                      }}
-                      onClose={() => setOverlay(null)}
-                    />
-                  )}
+            {isEditMode && (
+              <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border px-6 py-4">
+                <div className="flex min-w-0 flex-1 flex-col justify-center">
+                  <p className="truncate text-[14px] leading-[1.25] text-heading">
+                    <span className="font-bold">Website:</span> landscapeservices.jobbersite.com
+                  </p>
                 </div>
-                {/* + add page */}
-                <button
-                  onClick={() => toggle("addPage")}
-                  className="flex size-9 items-center justify-center rounded-lg bg-heading transition-colors hover:bg-[#063546]"
-                >
-                  <PlusIcon size={18} color="#ffffff" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Home select -> dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => toggle("home")}
+                      className="flex h-9 items-center gap-2 rounded-lg border border-border bg-surface pl-3 pr-2 text-[14px] text-heading transition-colors hover:bg-surface-subtle"
+                    >
+                      {getPreviewPageLabel(previewPage)}
+                      <ChevronDownIcon size={18} />
+                    </button>
+                    {overlay === "home" && (
+                      <HomeDropdown
+                        selectedPage={previewPage}
+                        hasLawnMowingPage={hasLawnMowingPage}
+                        onSelectPage={(page) => {
+                          onPreviewPageChange(page);
+                          setOverlay(null);
+                        }}
+                        onClose={() => setOverlay(null)}
+                      />
+                    )}
+                  </div>
+                  {/* + add page */}
+                  <button
+                    onClick={() => toggle("addPage")}
+                    className="flex size-9 items-center justify-center rounded-lg bg-heading transition-colors hover:bg-[#063546]"
+                  >
+                    <PlusIcon size={18} color="#ffffff" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Website preview */}
             <div
@@ -1057,6 +1053,7 @@ function Canvas({
                 onAddSection={onAddSection}
                 onMoveSection={onMoveSection}
                 onOpenQuoteModal={onOpenQuoteModal}
+                hasLawnMowingPage={hasLawnMowingPage}
                 homeContent={homeContent}
               />
             </div>
@@ -1070,6 +1067,12 @@ function Canvas({
 
 /* ----------------------------- Website preview ----------------------------- */
 
+function getPreviewPageLabel(page: PreviewPage) {
+  if (page === "projectShowcase") return "Project showcase";
+  if (page === "lawnMowing") return "Lawn mowing";
+  return "Home";
+}
+
 function WebsitePreview({
   previewPage,
   isEditMode,
@@ -1079,6 +1082,7 @@ function WebsitePreview({
   onAddSection,
   onMoveSection,
   onOpenQuoteModal,
+  hasLawnMowingPage,
   homeContent,
 }: {
   previewPage: PreviewPage;
@@ -1089,6 +1093,7 @@ function WebsitePreview({
   onAddSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, direction: "up" | "down") => void;
   onOpenQuoteModal: () => void;
+  hasLawnMowingPage: boolean;
   homeContent: HomePageContent;
 }) {
   if (previewPage === "projectShowcase") {
@@ -1100,6 +1105,10 @@ function WebsitePreview({
         onAddSection={onAddSection}
       />
     );
+  }
+
+  if (previewPage === "lawnMowing" && hasLawnMowingPage) {
+    return <LawnMowingPreview isEditMode={isEditMode} onAddSection={onAddSection} onOpenQuoteModal={onOpenQuoteModal} />;
   }
 
   return (
@@ -1121,7 +1130,7 @@ function WebsitePreview({
             <button className="rounded-lg border border-border bg-white px-4 py-2 text-[14px] font-semibold text-interactive-subtle hover:bg-surface-subtle">
               Client Login
             </button>
-            <button className="rounded-lg bg-interactive px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#2f7d20]">
+            <button className="rounded-lg bg-heading px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#063546]">
               Get a Quote
             </button>
           </div>
@@ -1269,7 +1278,7 @@ function HomePreviewSection({
                     }
                   : undefined
               }
-              className="w-fit rounded-lg bg-interactive px-6 py-3 text-[16px] font-semibold text-white hover:bg-[#2f7d20]"
+              className="w-fit rounded-lg bg-heading px-6 py-3 text-[16px] font-semibold text-white hover:bg-[#063546]"
             >
               Get a Quote
             </button>
@@ -1330,7 +1339,7 @@ function HomePreviewSection({
           <ServiceListItem title="Native plants" />
           <ServiceListItem title="Water features" />
         </div>
-        <button className="rounded-sm bg-interactive px-4 py-2 text-[14px] font-semibold leading-[1.25] text-white hover:bg-[#2f7d20]">
+        <button className="rounded-sm bg-heading px-4 py-2 text-[14px] font-semibold leading-[1.25] text-white hover:bg-[#063546]">
           Get a Quote
         </button>
       </EditableSection>
@@ -1565,6 +1574,166 @@ function PreviewInput({
   );
 }
 
+function LawnMowingPreview({
+  isEditMode,
+  onAddSection,
+  onOpenQuoteModal,
+}: {
+  isEditMode: boolean;
+  onAddSection: (sectionId: string) => void;
+  onOpenQuoteModal: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex shrink-0 items-center justify-between bg-white p-6 shadow-[0px_1px_4px_0px_rgba(0,0,0,0.16)]">
+        <div className="relative h-[46px] w-[200px]">
+          <img src={logoMark} alt="" className="absolute left-0 top-0 h-full w-[17.7px]" />
+          <img src={logoText} alt="" className="absolute right-0 top-0 h-full w-[170px]" />
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[14px] font-semibold text-interactive-subtle hover:bg-surface-subtle">
+              <PhoneIcon size={18} />
+              604-555-1234
+            </button>
+            <button className="rounded-lg border border-border bg-white px-4 py-2 text-[14px] font-semibold text-interactive-subtle hover:bg-surface-subtle">
+              Client Login
+            </button>
+            <button className="rounded-lg bg-heading px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#063546]">
+              Get a Quote
+            </button>
+          </div>
+          <button className="flex size-11 items-center justify-center rounded-lg hover:bg-surface-subtle">
+            <MenuIcon size={24} />
+          </button>
+        </div>
+      </div>
+
+      <EditableSection
+        sectionId="lawnMowingHero"
+        editable={isEditMode}
+        onAddSection={() => onAddSection("lawnMowingHero")}
+        className="flex min-h-[270px] items-stretch bg-brand"
+      >
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-6 px-8 py-16 text-white">
+          <h1 className="text-[36px] font-black leading-[1.11]">Expert Lawn Mowing</h1>
+          <p className="max-w-[420px] text-[16px] font-bold leading-[1.2]">
+            Transform your yard with our professional lawn mowing services tailored for local homeowners.
+          </p>
+        </div>
+        <div className="relative w-[52%] shrink-0 overflow-hidden">
+          <img src={heroImg} alt="" className="absolute inset-0 size-full object-cover object-[55%_70%]" />
+        </div>
+      </EditableSection>
+
+      <EditableSection
+        sectionId="lawnMowingBenefits"
+        editable={isEditMode}
+        onAddSection={() => onAddSection("lawnMowingBenefits")}
+        className="flex items-start justify-between gap-8 bg-brand-light px-6 py-16"
+      >
+        <div className="flex w-[411px] shrink-0 flex-col gap-12">
+          <h2 className="text-[32px] font-extrabold leading-9 text-[#1a1a1a]">Why Choose Our Lawn Mowing Service</h2>
+          <Feature
+            title="Consistent Yard Care"
+            body="We deliver regular lawn mowing to keep your yard looking neat and healthy all season long."
+          />
+          <Feature
+            title="Professional Equipment & Techniques"
+            body="Our team uses top-quality equipment and proven techniques for a clean, even cut every time."
+          />
+          <Feature
+            title="Flexible Scheduling"
+            body="Enjoy convenient scheduling options tailored to fit your busy lifestyle."
+          />
+        </div>
+        <div className="h-[460px] w-[423px] shrink-0 overflow-hidden rounded-lg">
+          <img src={serviceCard1} alt="" className="size-full object-cover" />
+        </div>
+      </EditableSection>
+
+      <EditableSection
+        sectionId="lawnMowingCta"
+        editable={isEditMode}
+        onAddSection={() => onAddSection("lawnMowingCta")}
+        className="flex flex-col items-center gap-6 bg-[#0027a0] px-12 py-24 text-center text-white"
+      >
+        <h2 className="text-[32px] font-extrabold leading-9">Get Your Lawn Looking Its Best Today</h2>
+        <p className="text-[16px] leading-[1.2]">
+          Contact AwesomeJaya for expert lawn mowing services in Toronto and Alberta now.
+        </p>
+        <button
+          onClick={
+            !isEditMode
+              ? (event) => {
+                  event.stopPropagation();
+                  onOpenQuoteModal();
+                }
+              : undefined
+          }
+          className="rounded-lg bg-white px-5 py-3 text-[16px] font-semibold text-[#1a1a1a] hover:bg-[#f1f0e9]"
+        >
+          Get a Quote
+        </button>
+      </EditableSection>
+
+      <EditableSection
+        sectionId="lawnMowingFaq"
+        editable={isEditMode}
+        onAddSection={() => onAddSection("lawnMowingFaq")}
+        className="flex items-start gap-10 bg-[#f3f4fc] px-12 py-20"
+      >
+        <div className="flex w-[262px] shrink-0 flex-col items-start gap-6">
+          <span className="rounded-lg bg-[#4d63a6] px-3 py-2 text-[14px] font-semibold text-white">FAQs</span>
+          <h2 className="text-[32px] font-extrabold leading-9 text-[#1f2504]">We've got answers</h2>
+          <p className="text-[16px] leading-6 text-[#1f2504]">
+            Find answers to common questions about our expert lawn mowing services.
+          </p>
+          <button className="rounded-lg bg-[#0027a0] px-5 py-3 text-[16px] font-semibold text-white">
+            Contact Us
+          </button>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <FaqItem
+            open
+            question="How often should I have my lawn mowed in Toronto and Alberta?"
+            answer="The frequency depends on the grass type and season, but typically weekly or bi-weekly mowing keeps your yard healthy."
+          />
+          <FaqItem question="What areas do you serve?" />
+          <FaqItem question="How do I schedule a lawn mowing appointment?" />
+          <FaqItem question="Is your equipment safe for my family and pets?" />
+        </div>
+      </EditableSection>
+
+      <EditableSection
+        sectionId="lawnMowingForm"
+        editable={isEditMode}
+        onAddSection={() => onAddSection("lawnMowingForm")}
+        className="flex flex-col items-center gap-12 bg-[#eef7f9] px-12 py-24"
+      >
+        <SectionHeading eyebrow="Quote" title="Get started today" align="center" />
+        <div className="w-full max-w-[760px]">
+          <QuoteCard />
+        </div>
+      </EditableSection>
+    </div>
+  );
+}
+
+function FaqItem({ question, answer, open = false }: { question: string; answer?: string; open?: boolean }) {
+  return (
+    <div className="border-b border-[#dce0ef] py-4">
+      <div className="flex items-start gap-4">
+        <h3 className="min-w-0 flex-1 text-[18px] font-bold leading-[1.2] text-[#1f2504]">{question}</h3>
+        <button className="flex size-8 shrink-0 items-center justify-center text-[#0027a0]">
+          <ChevronDownIcon size={18} />
+        </button>
+      </div>
+      {open && answer && <p className="mt-2 text-[14px] leading-[1.25] text-[#1f2504]">{answer}</p>}
+    </div>
+  );
+}
+
 function ProjectShowcasePreview({
   isEditMode,
   focusedSection,
@@ -1730,10 +1899,12 @@ function MenuRow({
 
 function HomeDropdown({
   selectedPage,
+  hasLawnMowingPage,
   onSelectPage,
   onClose,
 }: {
   selectedPage: PreviewPage;
+  hasLawnMowingPage: boolean;
   onSelectPage: (page: PreviewPage) => void;
   onClose: () => void;
 }) {
@@ -1749,8 +1920,8 @@ function HomeDropdown({
   const pages: Array<{ label: string; sub: boolean; value?: PreviewPage }> = [
     { label: "Home", sub: false, value: "home" },
     { label: "Services", sub: false },
+    ...(hasLawnMowingPage ? [{ label: "Lawn mowing", sub: true, value: "lawnMowing" as const }] : []),
     { label: "Project showcase", sub: false, value: "projectShowcase" },
-    { label: "Lawn mowing", sub: true },
     { label: "Weed control", sub: true },
     { label: "Sod installation", sub: true },
     { label: "Landscape Design", sub: true },
@@ -1905,7 +2076,113 @@ function QuoteField({
   );
 }
 
-function AddPageModal({ onClose }: { onClose: () => void }) {
+function ServicePagePromptModal({
+  onBack,
+  onClose,
+  onCreatePage,
+}: {
+  onBack: () => void;
+  onClose: () => void;
+  onCreatePage: () => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const canCreate = prompt.trim().length > 0;
+
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 px-8"
+      onClick={onClose}
+      role="presentation"
+    >
+      <form
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canCreate) onCreatePage();
+        }}
+        className="flex w-[626px] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-[0px_4px_12px_rgba(0,0,0,0.08),0px_1px_4px_rgba(0,0,0,0.1)]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="service-page-title"
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-surface-subtle"
+            aria-label="Back to add page"
+          >
+            <ChevronLeftIcon size={22} />
+          </button>
+          <h2 id="service-page-title" className="min-w-0 flex-1 text-[20px] font-bold leading-[1.2] text-heading">
+            Create service page
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-surface-subtle"
+            aria-label="Close"
+          >
+            <CloseIcon size={22} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-6 px-8 py-6">
+          <label className="flex flex-col gap-2">
+            <span className="text-[14px] font-semibold leading-[1.25] text-heading">Page name</span>
+            <input
+              value="Lawn mowing"
+              readOnly
+              className="h-12 rounded-lg border border-border bg-white px-4 text-[14px] text-interactive-subtle outline-none"
+            />
+            <span className="text-[12px] leading-[1.25] text-secondary">
+              Page name is displayed in your menu and used by Jobber AI to create default content
+            </span>
+          </label>
+
+          <label className="flex flex-col gap-2">
+            <span className="text-[14px] font-semibold leading-[1.25] text-heading">Tell Jobber AI what to create</span>
+            <textarea
+              autoFocus
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="Create a lawn mowing service page for homeowners in Toronto and Alberta."
+              className="min-h-[150px] resize-none rounded-lg border border-border bg-white px-4 py-3 text-[14px] leading-[1.4] text-interactive-subtle outline-none transition-colors placeholder:text-secondary focus:border-interactive"
+            />
+            <span className="text-[12px] leading-[1.25] text-secondary">
+              Add details and Jobber AI will transform them into compelling web content
+            </span>
+          </label>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-border px-8 py-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-lg border border-border bg-surface px-4 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!canCreate}
+            className="h-10 rounded-lg bg-[#0f8da5] px-4 text-[14px] font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Create Page
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AddPageModal({
+  onClose,
+  onSelectService,
+}: {
+  onClose: () => void;
+  onSelectService: () => void;
+}) {
   const items: { title: string; desc: string }[] = [
     { title: "Service", desc: "Provide details about a service you offer" },
     { title: "Job Showcase", desc: "Select one of your jobs and we’ll create a page based on the details" },
@@ -1934,7 +2211,7 @@ function AddPageModal({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col gap-2 p-6">
           <div className="flex flex-col">
             {items.map((it) => (
-              <PageItem key={it.title} {...it} />
+              <PageItem key={it.title} {...it} onClick={it.title === "Service" ? onSelectService : undefined} />
             ))}
           </div>
           <div className="h-px w-full bg-border" />
@@ -2068,9 +2345,12 @@ function ExitEditConfirmDialog({
   );
 }
 
-function PageItem({ title, desc }: { title: string; desc: string }) {
+function PageItem({ title, desc, onClick }: { title: string; desc: string; onClick?: () => void }) {
   return (
-    <button className="flex w-full items-center justify-between rounded-lg p-2 text-left transition-colors hover:bg-surface-subtle">
+    <button
+      onClick={onClick}
+      className="flex w-full items-center justify-between rounded-lg p-2 text-left transition-colors hover:bg-surface-subtle"
+    >
       <div className="flex flex-col gap-1">
         <p className="text-[14px] font-medium leading-[1.25] text-heading">{title}</p>
         <p className="text-[14px] leading-[1.25] text-secondary">{desc}</p>
