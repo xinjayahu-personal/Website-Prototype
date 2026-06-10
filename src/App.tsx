@@ -65,7 +65,10 @@ type LeftView =
 
 type AiDrawerState = "closed" | "expanded" | "collapsed";
 
-type AiView = { type: "section"; sectionId: string } | { type: "seoSettings" };
+type AiView =
+  | { type: "section"; sectionId: string }
+  | { type: "seoSettings" }
+  | { type: "page"; page: PreviewPage };
 type AiSummary = {
   title: string;
   view: AiView;
@@ -79,11 +82,18 @@ type AiMessage =
   | { id: string; role: "thinking" }
   | { id: string; role: "assistant"; text: string; summary?: AiSummary };
 
-type AiScenario = "heroSubtitle" | "seo";
+type AiScenario = "heroSubtitle" | "seo" | "addServicePage";
 
 /* Scripted scenario matcher for the mocked AI editor. */
 function matchAiScenario(prompt: string): AiScenario | null {
   const p = prompt.toLowerCase();
+  if (
+    p.includes("maintenance plan") ||
+    ((p.includes("service") || p.includes("page")) &&
+      (p.includes("add") || p.includes("new") || p.includes("create")))
+  ) {
+    return "addServicePage";
+  }
   if (
     p.includes("seo") ||
     p.includes("search engine") ||
@@ -167,6 +177,7 @@ export default function App() {
   const [aiInitialPrompt, setAiInitialPrompt] = useState("");
   const [aiDrawerState, setAiDrawerState] = useState<AiDrawerState>("closed");
   const [aiApplyingSectionId, setAiApplyingSectionId] = useState<string | null>(null);
+  const [aiCreatingPage, setAiCreatingPage] = useState(false);
   const [showExitEditConfirm, setShowExitEditConfirm] = useState(false);
   const [savedHomeContent, setSavedHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
   const [draftHomeContent, setDraftHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
@@ -213,10 +224,20 @@ export default function App() {
     setDraftHomeContent((c) => ({ ...c, heroSubheading: value }));
     window.setTimeout(() => setAiApplyingSectionId(null), 1800);
   };
+  const addAiServicePage = () => {
+    setHasLawnMowingPage(true);
+    setPreviewPage("lawnMowing");
+    setAiCreatingPage(true);
+    window.setTimeout(() => setAiCreatingPage(false), 1800);
+  };
   const viewAiChange = (view: AiView) => {
     if (view.type === "seoSettings") {
       setLeftView("seo");
       setAiDrawerState("collapsed");
+      return;
+    }
+    if (view.type === "page") {
+      setPreviewPage(view.page);
       return;
     }
     setPreviewPage("home");
@@ -328,6 +349,7 @@ export default function App() {
           }
           isAiEdit={isAiEdit}
           applyingSectionId={aiApplyingSectionId}
+          creatingPage={aiCreatingPage}
           onEditWebsite={beginEditMode}
           onCancelEdit={discardEditMode}
           onSaveEdit={saveEditMode}
@@ -377,6 +399,7 @@ export default function App() {
             initialPrompt={aiInitialPrompt}
             currentHeroSubheading={savedHomeContent.heroSubheading}
             onApplyHeroSubheading={applyAiHeroSubheading}
+            onAddServicePage={addAiServicePage}
             onView={viewAiChange}
           />
         )}
@@ -593,6 +616,7 @@ function AIEditDrawer({
   initialPrompt,
   currentHeroSubheading,
   onApplyHeroSubheading,
+  onAddServicePage,
   onView,
 }: {
   collapsed: boolean;
@@ -600,6 +624,7 @@ function AIEditDrawer({
   initialPrompt: string;
   currentHeroSubheading: string;
   onApplyHeroSubheading: (value: string) => void;
+  onAddServicePage: () => void;
   onView: (view: AiView) => void;
 }) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -607,6 +632,7 @@ function AIEditDrawer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const aliveRef = useRef(true);
   const didInit = useRef(false);
+  const awaitingServiceDescRef = useRef(false);
   const heroSubRef = useRef(currentHeroSubheading);
   heroSubRef.current = currentHeroSubheading;
 
@@ -622,10 +648,48 @@ function AIEditDrawer({
       { id: thinkingId, role: "thinking" },
     ]);
 
-    const scenario = matchAiScenario(trimmed);
+    const isServiceFollowup = awaitingServiceDescRef.current;
+    awaitingServiceDescRef.current = false;
+    const scenario = isServiceFollowup ? null : matchAiScenario(trimmed);
     window.setTimeout(() => {
       if (!aliveRef.current) return;
-      if (scenario === "heroSubtitle") {
+      if (isServiceFollowup) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: "Done — I\u2019ve updated the page with your description and linked it under your Services menu. Want to add anything else here, like photos, pricing, or a contact form?",
+                  summary: {
+                    title: "Updated page content",
+                    detail: '"Maintenance Plans" \u2192 description + Services menu link',
+                    view: { type: "page", page: "lawnMowing" },
+                  },
+                }
+              : m,
+          ),
+        );
+      } else if (scenario === "addServicePage") {
+        onAddServicePage();
+        awaitingServiceDescRef.current = true;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: 'Got it — I\u2019ll add a new Lawn mowing service page. It has a hero section, a short description of the service, a FAQ section and a "Get a Quote" button, and I\u2019ve added this page to your navigation. I used placeholder text and images for the description — want to tell me a bit about this service so I can fill it in?',
+                  summary: {
+                    title: "Added new page",
+                    detail: 'New page: "Lawn mowing" (added to navigation)',
+                    view: { type: "page", page: "lawnMowing" },
+                  },
+                }
+              : m,
+          ),
+        );
+      } else if (scenario === "heroSubtitle") {
         const before = heroSubRef.current;
         const after = "Expert landscape design & installation — book your free, no-obligation quote today";
         onApplyHeroSubheading(after);
@@ -1294,6 +1358,7 @@ function Canvas({
   isEditMode,
   isAiEdit,
   applyingSectionId,
+  creatingPage,
   focusedSection,
   onEditWebsite,
   onCancelEdit,
@@ -1316,6 +1381,7 @@ function Canvas({
   isEditMode: boolean;
   isAiEdit: boolean;
   applyingSectionId: string | null;
+  creatingPage: boolean;
   focusedSection: "hero" | "projectOverview" | null;
   onEditWebsite: () => void;
   onCancelEdit: () => void;
@@ -1485,6 +1551,7 @@ function Canvas({
                 homeContent={homeContent}
               />
             </div>
+            {creatingPage && <PagePreviewSkeleton />}
             {overlay === "quote" && !isEditMode && <QuoteRequestModal onClose={() => setOverlay(null)} />}
           </div>
         </div>
@@ -1649,6 +1716,35 @@ function EditableSection({
       {children}
       {applying && <SectionSkeleton />}
     </section>
+  );
+}
+
+function PagePreviewSkeleton() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[72px] z-30 overflow-hidden bg-surface">
+      <div className="flex items-center justify-between border-b border-border bg-white px-6 py-5">
+        <div className="h-8 w-44 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-24 animate-pulse rounded-lg bg-[#e4e8ea]" />
+          <div className="h-8 w-24 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        </div>
+      </div>
+      <div className="flex items-stretch gap-5 bg-[#eef1f0] px-6 py-14">
+        <div className="flex flex-1 flex-col justify-center gap-5">
+          <div className="h-12 w-2/3 animate-pulse rounded-lg bg-[#e4e8ea]" />
+          <div className="h-5 w-3/4 animate-pulse rounded-lg bg-[#e4e8ea]" />
+          <div className="h-5 w-1/2 animate-pulse rounded-lg bg-[#e4e8ea]" />
+          <div className="h-12 w-36 animate-pulse rounded-lg bg-[#dfe3e5]" />
+        </div>
+        <div className="h-56 w-[42%] shrink-0 animate-pulse rounded-lg bg-[#e4e8ea]" />
+      </div>
+      <div className="flex flex-col gap-4 px-6 py-12">
+        <div className="h-8 w-1/3 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        <div className="h-4 w-full animate-pulse rounded-lg bg-[#e4e8ea]" />
+        <div className="h-4 w-5/6 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        <div className="h-4 w-2/3 animate-pulse rounded-lg bg-[#e4e8ea]" />
+      </div>
+    </div>
   );
 }
 
