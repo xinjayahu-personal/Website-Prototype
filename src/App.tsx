@@ -145,6 +145,7 @@ export default function App() {
   const [hasLawnMowingPage, setHasLawnMowingPage] = useState(false);
   const [aiInitialPrompt, setAiInitialPrompt] = useState("");
   const [aiDrawerState, setAiDrawerState] = useState<AiDrawerState>("closed");
+  const [aiApplyingSectionId, setAiApplyingSectionId] = useState<string | null>(null);
   const [showExitEditConfirm, setShowExitEditConfirm] = useState(false);
   const [savedHomeContent, setSavedHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
   const [draftHomeContent, setDraftHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
@@ -186,8 +187,10 @@ export default function App() {
   const toggleAiDrawer = () =>
     setAiDrawerState((s) => (s === "collapsed" ? "expanded" : "collapsed"));
   const applyAiHeroSubheading = (value: string) => {
+    setAiApplyingSectionId("hero");
     setSavedHomeContent((c) => ({ ...c, heroSubheading: value }));
     setDraftHomeContent((c) => ({ ...c, heroSubheading: value }));
+    window.setTimeout(() => setAiApplyingSectionId(null), 1800);
   };
   const viewAiChange = (sectionId: string) => {
     setPreviewPage("home");
@@ -298,6 +301,7 @@ export default function App() {
             leftView === "heroEdit" ? "hero" : leftView === "projectOverviewEdit" ? "projectOverview" : null
           }
           isAiEdit={isAiEdit}
+          applyingSectionId={aiApplyingSectionId}
           onEditWebsite={beginEditMode}
           onCancelEdit={discardEditMode}
           onSaveEdit={saveEditMode}
@@ -624,7 +628,7 @@ function AIEditDrawer({
           ),
         );
       }
-    }, 1600);
+    }, 5000);
   };
 
   useEffect(() => {
@@ -1242,6 +1246,7 @@ function Canvas({
   setOverlay,
   isEditMode,
   isAiEdit,
+  applyingSectionId,
   focusedSection,
   onEditWebsite,
   onCancelEdit,
@@ -1263,6 +1268,7 @@ function Canvas({
   setOverlay: (o: Overlay) => void;
   isEditMode: boolean;
   isAiEdit: boolean;
+  applyingSectionId: string | null;
   focusedSection: "hero" | "projectOverview" | null;
   onEditWebsite: () => void;
   onCancelEdit: () => void;
@@ -1421,6 +1427,7 @@ function Canvas({
               <WebsitePreview
                 previewPage={previewPage}
                 isEditMode={isEditMode}
+                applyingSectionId={applyingSectionId}
                 focusedSection={focusedSection}
                 onSelectHero={onSelectHero}
                 onSelectProjectOverview={onSelectProjectOverview}
@@ -1450,6 +1457,7 @@ function getPreviewPageLabel(page: PreviewPage) {
 function WebsitePreview({
   previewPage,
   isEditMode,
+  applyingSectionId,
   focusedSection,
   onSelectHero,
   onSelectProjectOverview,
@@ -1461,6 +1469,7 @@ function WebsitePreview({
 }: {
   previewPage: PreviewPage;
   isEditMode: boolean;
+  applyingSectionId: string | null;
   focusedSection: "hero" | "projectOverview" | null;
   onSelectHero: () => void;
   onSelectProjectOverview: () => void;
@@ -1521,6 +1530,7 @@ function WebsitePreview({
           canMoveUp={index > 0}
           canMoveDown={index < homeContent.sections.length - 1}
           isEditMode={isEditMode}
+          applying={applyingSectionId === section.id}
           focusedSection={focusedSection}
           onSelectHero={onSelectHero}
           onAddSection={() => onAddSection(section.id)}
@@ -1539,6 +1549,7 @@ function EditableSection({
   className,
   sectionId,
   editable = true,
+  applying = false,
   focused = false,
   label,
   onClick,
@@ -1553,6 +1564,7 @@ function EditableSection({
   className: string;
   sectionId?: string;
   editable?: boolean;
+  applying?: boolean;
   focused?: boolean;
   label?: string;
   onClick?: () => void;
@@ -1570,10 +1582,11 @@ function EditableSection({
       id={sectionId ? `preview-section-${sectionId}` : undefined}
       onClick={editable ? onClick : undefined}
       className={`${editable ? "group" : ""} relative shrink-0 ${editable && onClick ? "cursor-pointer" : ""} ${
-        isFocused ? "overflow-hidden rounded-2xl" : ""
+        isFocused || applying ? "overflow-hidden rounded-2xl" : ""
       } ${className}`}
     >
       {editable &&
+        !applying &&
         (isFocused ? (
           <FocusedSectionToolbar label={label ?? "Editing Section"} />
         ) : (
@@ -1587,7 +1600,25 @@ function EditableSection({
           />
         ))}
       {children}
+      {applying && <SectionSkeleton />}
     </section>
+  );
+}
+
+function SectionSkeleton() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30 flex items-stretch gap-5 bg-surface pl-6">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-6 py-16">
+        <div className="h-7 w-24 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        <div className="h-12 w-2/3 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        <div className="flex flex-col gap-2">
+          <div className="h-5 w-3/4 animate-pulse rounded-lg bg-[#e4e8ea]" />
+          <div className="h-5 w-1/2 animate-pulse rounded-lg bg-[#e4e8ea]" />
+        </div>
+        <div className="h-12 w-36 animate-pulse rounded-lg bg-[#e4e8ea]" />
+      </div>
+      <div className="w-[42%] shrink-0 animate-pulse self-stretch bg-[#e4e8ea]" />
+    </div>
   );
 }
 
@@ -1596,6 +1627,7 @@ function HomePreviewSection({
   canMoveUp,
   canMoveDown,
   isEditMode,
+  applying,
   focusedSection,
   onSelectHero,
   onAddSection,
@@ -1608,6 +1640,7 @@ function HomePreviewSection({
   canMoveUp: boolean;
   canMoveDown: boolean;
   isEditMode: boolean;
+  applying: boolean;
   focusedSection: "hero" | "projectOverview" | null;
   onSelectHero: () => void;
   onAddSection: () => void;
@@ -1622,6 +1655,7 @@ function HomePreviewSection({
         sectionId={section.id}
         className="flex items-stretch justify-center gap-5 bg-brand pl-6"
         editable={isEditMode}
+        applying={applying}
         focused={focusedSection === "hero"}
         label="Editing Hero Section"
         onClick={isEditMode ? onSelectHero : undefined}
