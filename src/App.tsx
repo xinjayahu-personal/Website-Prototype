@@ -68,7 +68,8 @@ type AiDrawerState = "closed" | "expanded" | "collapsed";
 type AiView =
   | { type: "section"; sectionId: string }
   | { type: "seoSettings" }
-  | { type: "page"; page: PreviewPage };
+  | { type: "page"; page: PreviewPage }
+  | { type: "teamGallery" };
 type AiSummary = {
   title: string;
   view: AiView;
@@ -78,15 +79,23 @@ type AiSummary = {
   description?: string;
 };
 type AiMessage =
-  | { id: string; role: "user"; text: string }
+  | { id: string; role: "user"; text: string; images?: string[] }
   | { id: string; role: "thinking" }
   | { id: string; role: "assistant"; text: string; summary?: AiSummary };
 
-type AiScenario = "heroSubtitle" | "seo" | "addServicePage";
+type AiScenario = "heroSubtitle" | "seo" | "addServicePage" | "teamGallery";
 
 /* Scripted scenario matcher for the mocked AI editor. */
 function matchAiScenario(prompt: string): AiScenario | null {
   const p = prompt.toLowerCase();
+  if (
+    p.includes("image gallery") ||
+    p.includes("photo gallery") ||
+    ((p.includes("team") || p.includes("gallery") || p.includes("staff")) &&
+      (p.includes("photo") || p.includes("image") || p.includes("picture") || p.includes("gallery")))
+  ) {
+    return "teamGallery";
+  }
   if (
     p.includes("maintenance plan") ||
     ((p.includes("service") || p.includes("page")) &&
@@ -130,7 +139,12 @@ type HomeSectionKind = "hero" | "featured" | "servicesList" | "serviceCards" | "
 type HomeSection = {
   id: string;
   kind: HomeSectionKind;
+  variant?: "team";
+  images?: string[];
 };
+
+/* Placeholder "team" photos staged when a user uploads via the AI uploader. */
+const TEAM_PHOTO_POOL = [serviceCard1, serviceCard2, serviceCard4, projectGallery3, house3Img, projectGallery1];
 type HomePageContent = {
   heroHeading: string;
   heroSubheading: string;
@@ -230,6 +244,41 @@ export default function App() {
     setAiCreatingPage(true);
     window.setTimeout(() => setAiCreatingPage(false), 1800);
   };
+  const addAiTeamGallery = () => {
+    const newSection: HomeSection = {
+      id: `teamGallery-${Date.now()}`,
+      kind: "imageGallery",
+      variant: "team",
+      images: [],
+    };
+    const insert = (c: HomePageContent) => ({ ...c, sections: [...c.sections, newSection] });
+    setSavedHomeContent(insert);
+    setDraftHomeContent(insert);
+    setPreviewPage("home");
+    setPendingScrollSectionId(newSection.id);
+  };
+  const applyAiTeamPhotos = (images: string[]) => {
+    let targetId: string | null = null;
+    const apply = (c: HomePageContent) => ({
+      ...c,
+      sections: c.sections.map((s) => {
+        if (s.variant === "team") {
+          targetId = s.id;
+          return { ...s, images };
+        }
+        return s;
+      }),
+    });
+    setSavedHomeContent(apply);
+    setDraftHomeContent(apply);
+    setPreviewPage("home");
+    if (targetId) {
+      setAiApplyingSectionId(targetId);
+      setPendingScrollSectionId(targetId);
+      window.setTimeout(() => setAiApplyingSectionId(null), 1800);
+    }
+  };
+  const findTeamGalleryId = () => savedHomeContent.sections.find((s) => s.variant === "team")?.id ?? null;
   const viewAiChange = (view: AiView) => {
     if (view.type === "seoSettings") {
       setLeftView("seo");
@@ -238,6 +287,12 @@ export default function App() {
     }
     if (view.type === "page") {
       setPreviewPage(view.page);
+      return;
+    }
+    if (view.type === "teamGallery") {
+      const id = findTeamGalleryId();
+      setPreviewPage("home");
+      if (id) setPendingScrollSectionId(id);
       return;
     }
     setPreviewPage("home");
@@ -400,6 +455,8 @@ export default function App() {
             currentHeroSubheading={savedHomeContent.heroSubheading}
             onApplyHeroSubheading={applyAiHeroSubheading}
             onAddServicePage={addAiServicePage}
+            onAddTeamGallery={addAiTeamGallery}
+            onApplyTeamPhotos={applyAiTeamPhotos}
             onView={viewAiChange}
           />
         )}
@@ -617,6 +674,8 @@ function AIEditDrawer({
   currentHeroSubheading,
   onApplyHeroSubheading,
   onAddServicePage,
+  onAddTeamGallery,
+  onApplyTeamPhotos,
   onView,
 }: {
   collapsed: boolean;
@@ -625,14 +684,19 @@ function AIEditDrawer({
   currentHeroSubheading: string;
   onApplyHeroSubheading: (value: string) => void;
   onAddServicePage: () => void;
+  onAddTeamGallery: () => void;
+  onApplyTeamPhotos: (images: string[]) => void;
   onView: (view: AiView) => void;
 }) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [stagedImages, setStagedImages] = useState<string[]>([]);
+  const [showUploader, setShowUploader] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const aliveRef = useRef(true);
   const didInit = useRef(false);
   const awaitingServiceDescRef = useRef(false);
+  const awaitingTeamPhotosRef = useRef(false);
   const heroSubRef = useRef(currentHeroSubheading);
   heroSubRef.current = currentHeroSubheading;
 
@@ -665,6 +729,25 @@ function AIEditDrawer({
                     title: "Updated page content",
                     detail: '"Lawn mowing" \u2192 description + Services menu link',
                     view: { type: "page", page: "lawnMowing" },
+                  },
+                }
+              : m,
+          ),
+        );
+      } else if (scenario === "teamGallery") {
+        onAddTeamGallery();
+        awaitingTeamPhotosRef.current = true;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: "Got it — I\u2019ll add an image gallery section to your homepage to show off your team. I don\u2019t have your team\u2019s photos yet, so I\u2019ve added placeholders. To set it up, upload at least 3 images of your team and I\u2019ll add them to the gallery.",
+                  summary: {
+                    title: "Added section",
+                    detail: "Home \u2192 Team image gallery (placeholders)",
+                    view: { type: "teamGallery" },
                   },
                 }
               : m,
@@ -763,6 +846,64 @@ function AIEditDrawer({
     setDraft("");
   };
 
+  const submitImages = () => {
+    const imgs = stagedImages;
+    if (imgs.length === 0) return;
+    if (collapsed) onToggleCollapsed();
+    setStagedImages([]);
+
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const thinkingId = `t-${stamp}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-${stamp}`, role: "user", text: `Uploaded ${imgs.length} image${imgs.length > 1 ? "s" : ""}`, images: imgs },
+      { id: thinkingId, role: "thinking" },
+    ]);
+
+    const enough = imgs.length >= 3;
+    window.setTimeout(() => {
+      if (!aliveRef.current) return;
+      if (enough) {
+        onApplyTeamPhotos(imgs);
+        awaitingTeamPhotosRef.current = false;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: "Perfect — I\u2019ve added your photos to the team gallery on your homepage. Want a heading or short caption above it?",
+                  summary: {
+                    title: "Added images",
+                    detail: `Home \u2192 Team gallery (${imgs.length} photos)`,
+                    view: { type: "teamGallery" },
+                  },
+                }
+              : m,
+          ),
+        );
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: "Thanks! I\u2019ll need at least 3 images to fill the gallery — could you add a couple more?",
+                }
+              : m,
+          ),
+        );
+      }
+    }, enough ? 5000 : 1200);
+  };
+
+  const onSend = () => (stagedImages.length > 0 ? submitImages() : submitDraft());
+  const addStagedImage = () => {
+    setStagedImages((prev) => [...prev, TEAM_PHOTO_POOL[prev.length % TEAM_PHOTO_POOL.length]]);
+    setShowUploader(false);
+  };
+
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant") as
     | Extract<AiMessage, { role: "assistant" }>
     | undefined;
@@ -809,8 +950,15 @@ function AIEditDrawer({
           {messages.map((m) => {
             if (m.role === "user") {
               return (
-                <div key={m.id} className="w-full rounded-lg bg-[#d6ecfb] px-3 py-2 text-[14px] leading-[1.3] text-heading">
-                  {m.text}
+                <div key={m.id} className="flex w-full flex-col gap-2 rounded-lg bg-[#d6ecfb] px-3 py-2 text-[14px] leading-[1.3] text-heading">
+                  <span>{m.text}</span>
+                  {m.images && m.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {m.images.map((src, i) => (
+                        <img key={i} src={src} alt="" className="size-12 rounded-md object-cover" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -848,40 +996,118 @@ function AIEditDrawer({
       )}
 
       {/* Composer */}
-      <div className="shrink-0 px-5 pb-5 pt-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-12 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-4">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitDraft();
-                }
-              }}
-              placeholder="Describe what you'd like updated or added"
-              className="min-w-0 flex-1 bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
-            />
-            <button type="button" className="flex size-7 shrink-0 items-center justify-center" aria-label="Voice input">
-              <MicIcon size={18} />
+      <div className="relative shrink-0 px-5 pb-5 pt-3">
+        {stagedImages.length > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-2 pb-3">
+              {stagedImages.map((src, i) => (
+                <img key={i} src={src} alt="" className="size-[68px] rounded-lg object-cover" />
+              ))}
+            </div>
+            <p className="pb-2 text-[14px] font-medium text-heading">Add these</p>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowUploader(true)}
+                className="flex size-12 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+                aria-label="Add more images"
+              >
+                <PlusIcon size={20} color="#032B3A" />
+              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" className="flex size-12 items-center justify-center rounded-lg border border-border bg-surface" aria-label="Voice input">
+                  <MicIcon size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={onSend}
+                  className="flex size-12 items-center justify-center rounded-lg bg-surface-subtle transition-colors hover:bg-[#e4e8ea]"
+                  aria-label="Send"
+                >
+                  <ArrowUpIcon size={20} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowUploader(true)}
+              className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+              aria-label="Upload images"
+            >
+              <PlusIcon size={20} color="#032B3A" />
+            </button>
+            <div className="flex h-12 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-4">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitDraft();
+                  }
+                }}
+                placeholder="Describe what you'd like updated or added"
+                className="min-w-0 flex-1 bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
+              />
+              <button type="button" className="flex size-7 shrink-0 items-center justify-center" aria-label="Voice input">
+                <MicIcon size={18} />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onSend}
+              className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+              aria-label="Send"
+            >
+              <ArrowUpIcon size={20} />
             </button>
           </div>
-          <button
-            type="button"
-            onClick={submitDraft}
-            className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
-            aria-label="Send"
-          >
-            <ArrowUpIcon size={20} />
-          </button>
-        </div>
-        {!collapsed && (
+        )}
+        {!collapsed && stagedImages.length === 0 && (
           <p className="px-1 pt-2 text-[12px] leading-[1.25] text-secondary">
             AI can make mistakes. Check important info. <span className="font-semibold text-heading">Learn more.</span>
           </p>
         )}
       </div>
+
+      {/* Upload file dialog */}
+      {showUploader && (
+        <div
+          className="absolute inset-0 z-40 flex items-end justify-center rounded-t-2xl bg-black/20 p-4"
+          onClick={() => setShowUploader(false)}
+        >
+          <div
+            className="mb-4 w-full rounded-xl border border-border bg-surface p-5 shadow-[0px_8px_24px_rgba(0,0,0,0.18)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <h3 className="text-[18px] font-bold leading-[1.2] text-heading">Upload file</h3>
+              <button
+                type="button"
+                onClick={() => setShowUploader(false)}
+                className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle"
+                aria-label="Close"
+              >
+                <CloseIcon size={18} />
+              </button>
+            </div>
+            <p className="pt-1 text-[13px] leading-[1.3] text-secondary">Upload image or file</p>
+            <div className="mt-4 flex flex-col items-center gap-2 rounded-lg border border-dashed border-[#9bb3bd] py-6">
+              <button
+                type="button"
+                onClick={addStagedImage}
+                className="rounded-lg border border-border bg-surface px-4 py-2 text-[14px] font-semibold text-interactive transition-colors hover:bg-surface-subtle"
+              >
+                Select Files
+              </button>
+              <p className="text-[12px] leading-[1.25] text-secondary">Select or drag files here to upload</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1942,6 +2168,9 @@ function HomePreviewSection({
     <HomeImageGallerySection
       sectionId={section.id}
       isEditMode={isEditMode}
+      applying={applying}
+      variant={section.variant}
+      images={section.images}
       onAddSection={onAddSection}
       onMoveUp={onMoveUp}
       onMoveDown={onMoveDown}
@@ -1954,6 +2183,9 @@ function HomePreviewSection({
 function HomeImageGallerySection({
   sectionId,
   isEditMode,
+  applying,
+  variant,
+  images,
   onAddSection,
   onMoveUp,
   onMoveDown,
@@ -1962,17 +2194,24 @@ function HomeImageGallerySection({
 }: {
   sectionId: string;
   isEditMode: boolean;
+  applying: boolean;
+  variant?: "team";
+  images?: string[];
   onAddSection: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
 }) {
+  const isTeam = variant === "team";
+  const teamPhotos = images ?? [];
+
   return (
     <EditableSection
       sectionId={sectionId}
       className="bg-[rgba(56,101,118,0.1)] px-12 py-16"
       editable={isEditMode}
+      applying={applying}
       onAddSection={onAddSection}
       onMoveUp={onMoveUp}
       onMoveDown={onMoveDown}
@@ -1982,25 +2221,46 @@ function HomeImageGallerySection({
       <div className="flex flex-col items-start gap-8 py-4">
         <div className="flex flex-col items-start justify-center gap-6">
           <span className="bg-[#4e9271] px-3 py-2 text-[14px] font-semibold leading-[1.25] text-white">
-            Image Gallery
+            {isTeam ? "Team" : "Image Gallery"}
           </span>
           <h2 className="font-serif text-[30px] font-bold leading-[1.25] text-[#1a1a1a]">
-            Get inspired by our work
+            {isTeam ? "Meet our team" : "Get inspired by our work"}
           </h2>
         </div>
-        <div className="grid h-[645px] w-full grid-cols-3 gap-4">
-          <div className="flex min-w-0 flex-col gap-4">
-            <img src={projectGallery1} alt="" className="h-[317px] w-full object-cover" />
-            <img src={projectGallery2} alt="" className="h-[312px] w-full object-cover" />
+        {isTeam ? (
+          teamPhotos.length > 0 ? (
+            <div className="grid w-full grid-cols-3 gap-4">
+              {teamPhotos.map((src, i) => (
+                <img key={i} src={src} alt="" className="h-[260px] w-full rounded-lg object-cover" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid w-full grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex h-[260px] w-full items-center justify-center rounded-lg border border-dashed border-[#9bb3bd] bg-[rgba(56,101,118,0.08)]"
+                >
+                  <ImageIcon size={40} color="#6f8a95" />
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="grid h-[645px] w-full grid-cols-3 gap-4">
+            <div className="flex min-w-0 flex-col gap-4">
+              <img src={projectGallery1} alt="" className="h-[317px] w-full object-cover" />
+              <img src={projectGallery2} alt="" className="h-[312px] w-full object-cover" />
+            </div>
+            <div className="flex min-w-0 flex-col gap-4">
+              <img src={projectGallery3} alt="" className="h-[187px] w-full object-cover" />
+              <img src={projectGallery4} alt="" className="h-[439px] w-full object-cover" />
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <img src={projectGallery5} alt="" className="h-[640px] w-full object-cover" />
+            </div>
           </div>
-          <div className="flex min-w-0 flex-col gap-4">
-            <img src={projectGallery3} alt="" className="h-[187px] w-full object-cover" />
-            <img src={projectGallery4} alt="" className="h-[439px] w-full object-cover" />
-          </div>
-          <div className="flex min-w-0 flex-col">
-            <img src={projectGallery5} alt="" className="h-[640px] w-full object-cover" />
-          </div>
-        </div>
+        )}
       </div>
     </EditableSection>
   );
