@@ -139,3 +139,32 @@ export const ImageIcon = ({ size = 20, className, color = "#233D48" }: IconProps
     <path d="M6.5 17l4.2-4.2 2.5 2.5 1.5-1.5L18 17" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
   </svg>
 );
+
+export const SparkleIcon = ({ size = 20, className, color = "#0f8da5" }: IconProps) => (
+  <svg {...base(size, className)}>
+    <path d="M11.5 3l1.7 6.3 6.3 1.7-6.3 1.7-1.7 6.3-1.7-6.3L3.5 11l6.3-1.7L11.5 3z" fill={color} />
+    <path d="M18.7 3l.6 2.2 2.2.6-2.2.6-.6 2.2-.6-2.2-2.2-.6 2.2-.6.6-2.2z" fill={color} opacity={0.7} />
+  </svg>
+);
+
+export const ThumbsUpIcon = ({ size = 18, className, color = "#5d757e" }: IconProps) => (
+  <svg {...base(size, className)}>
+    <path
+      d="M7 10v9H4.5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1H7zm0 0l3.6-6.4a1.8 1.8 0 0 1 3.4.9V8h4.3a1.8 1.8 0 0 1 1.8 2.1l-1 6A1.8 1.8 0 0 1 17.3 18H7"
+      stroke={color}
+      strokeWidth={1.6}
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const ThumbsDownIcon = ({ size = 18, className, color = "#5d757e" }: IconProps) => (
+  <svg {...base(size, className)}>
+    <path
+      d="M17 14V5h2.5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H17zm0 0l-3.6 6.4a1.8 1.8 0 0 1-3.4-.9V16H5.7a1.8 1.8 0 0 1-1.8-2.1l1-6A1.8 1.8 0 0 1 6.7 6H17"
+      stroke={color}
+      strokeWidth={1.6}
+      strokeLinejoin="round"
+    />
+  </svg>
+);

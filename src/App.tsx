@@ -41,6 +41,9 @@ import {
   ArrowDownIcon,
   MicIcon,
   ImageIcon,
+  SparkleIcon,
+  ThumbsUpIcon,
+  ThumbsDownIcon,
 } from "./Icons";
 
 const FRAME_W = 1440;
@@ -58,7 +61,36 @@ type LeftView =
   | "edit"
   | "heroEdit"
   | "projectEdit"
-  | "projectOverviewEdit";
+  | "projectOverviewEdit"
+  | "aiEdit";
+
+type AiSummary = { title: string; before: string; after: string; sectionId: string };
+type AiMessage =
+  | { id: string; role: "user"; text: string }
+  | { id: string; role: "thinking" }
+  | { id: string; role: "assistant"; text: string; summary?: AiSummary };
+
+/* Scripted scenario matcher for the mocked AI editor. */
+function matchAiScenario(prompt: string): "heroSubtitle" | null {
+  const p = prompt.toLowerCase();
+  if (
+    p.includes("subtitle") ||
+    p.includes("subheading") ||
+    p.includes("line under") ||
+    p.includes("text under") ||
+    p.includes("under the headline") ||
+    p.includes("under your headline") ||
+    p.includes("under the title") ||
+    p.includes("below the headline") ||
+    p.includes("below the title") ||
+    p.includes("free quote") ||
+    p.includes("no-obligation") ||
+    p.includes("no obligation")
+  ) {
+    return "heroSubtitle";
+  }
+  return null;
+}
 type PreviewPage = "home" | "projectShowcase" | "lawnMowing";
 type HomeSectionKind = "hero" | "featured" | "servicesList" | "serviceCards" | "quote" | "imageGallery";
 type HomeSection = {
@@ -108,6 +140,7 @@ export default function App() {
   const [leftView, setLeftView] = useState<LeftView>("landing");
   const [previewPage, setPreviewPage] = useState<PreviewPage>("home");
   const [hasLawnMowingPage, setHasLawnMowingPage] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState("");
   const [showExitEditConfirm, setShowExitEditConfirm] = useState(false);
   const [savedHomeContent, setSavedHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
   const [draftHomeContent, setDraftHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
@@ -120,6 +153,7 @@ export default function App() {
     leftView === "heroEdit" ||
     leftView === "projectEdit" ||
     leftView === "projectOverviewEdit";
+  const isAiEdit = leftView === "aiEdit";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOverlay(null);
@@ -139,6 +173,19 @@ export default function App() {
     setPreviewPage("lawnMowing");
     setLeftView("edit");
     setOverlay(null);
+  };
+  const startAiEdit = (prompt: string) => {
+    setAiInitialPrompt(prompt);
+    setOverlay(null);
+    setLeftView("aiEdit");
+  };
+  const applyAiHeroSubheading = (value: string) => {
+    setSavedHomeContent((c) => ({ ...c, heroSubheading: value }));
+    setDraftHomeContent((c) => ({ ...c, heroSubheading: value }));
+  };
+  const viewAiChange = (sectionId: string) => {
+    setPreviewPage("home");
+    setPendingScrollSectionId(sectionId);
   };
   const beginEditMode = () => {
     setDraftHomeContent(savedHomeContent);
@@ -234,6 +281,12 @@ export default function App() {
           onAddSection={() => openAddSection({ mode: "append" })}
           homeContent={draftHomeContent}
           onHomeContentChange={(patch) => setDraftHomeContent((current) => ({ ...current, ...patch }))}
+          onStartAiEdit={startAiEdit}
+          aiInitialPrompt={aiInitialPrompt}
+          currentHeroSubheading={savedHomeContent.heroSubheading}
+          onApplyAiHeroSubheading={applyAiHeroSubheading}
+          onViewAiChange={viewAiChange}
+          onCloseAiEdit={() => setLeftView("landing")}
         />
         <Canvas
           overlay={overlay}
@@ -243,6 +296,7 @@ export default function App() {
           focusedSection={
             leftView === "heroEdit" ? "hero" : leftView === "projectOverviewEdit" ? "projectOverview" : null
           }
+          isAiEdit={isAiEdit}
           onEditWebsite={beginEditMode}
           onCancelEdit={discardEditMode}
           onSaveEdit={saveEditMode}
@@ -297,6 +351,12 @@ function Sidebar({
   onAddSection,
   homeContent,
   onHomeContentChange,
+  onStartAiEdit,
+  aiInitialPrompt,
+  currentHeroSubheading,
+  onApplyAiHeroSubheading,
+  onViewAiChange,
+  onCloseAiEdit,
 }: {
   leftView: LeftView;
   setLeftView: (v: LeftView) => void;
@@ -304,7 +364,27 @@ function Sidebar({
   onAddSection: () => void;
   homeContent: HomePageContent;
   onHomeContentChange: (patch: Partial<HomePageContent>) => void;
+  onStartAiEdit: (prompt: string) => void;
+  aiInitialPrompt: string;
+  currentHeroSubheading: string;
+  onApplyAiHeroSubheading: (value: string) => void;
+  onViewAiChange: (sectionId: string) => void;
+  onCloseAiEdit: () => void;
 }) {
+  if (leftView === "aiEdit") {
+    return (
+      <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
+        <AIEditPanel
+          initialPrompt={aiInitialPrompt}
+          currentHeroSubheading={currentHeroSubheading}
+          onApplyHeroSubheading={onApplyAiHeroSubheading}
+          onViewChange={onViewAiChange}
+          onClose={onCloseAiEdit}
+        />
+      </div>
+    );
+  }
+
   if (leftView === "edit") {
     return (
       <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
@@ -353,7 +433,7 @@ function Sidebar({
   return (
     <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
       {leftView === "landing" ? (
-        <LandingPanel onOpen={setLeftView} />
+        <LandingPanel onOpen={setLeftView} onStartAiEdit={onStartAiEdit} />
       ) : (
         <ToolView view={leftView} onBack={() => setLeftView("landing")} />
       )}
@@ -361,9 +441,20 @@ function Sidebar({
   );
 }
 
-function LandingPanel({ onOpen }: {
+function LandingPanel({
+  onOpen,
+  onStartAiEdit,
+}: {
   onOpen: (v: LeftView) => void;
+  onStartAiEdit: (prompt: string) => void;
 }) {
+  const [aiPrompt, setAiPrompt] = useState("");
+  const submitAiPrompt = () => {
+    const trimmed = aiPrompt.trim();
+    if (!trimmed) return;
+    onStartAiEdit(trimmed);
+    setAiPrompt("");
+  };
   return (
     <>
       {/* Navigation control */}
@@ -431,6 +522,40 @@ function LandingPanel({ onOpen }: {
         />
       </div>
 
+      {/* AI edit launcher */}
+      <div className="flex w-[412px] shrink-0 flex-col gap-2 px-6 pb-1 pt-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-12 flex-1 items-center gap-2 rounded-full border border-border bg-surface px-4">
+            <input
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitAiPrompt();
+                }
+              }}
+              placeholder="Make the homepage headline more welcoming"
+              className="min-w-0 flex-1 bg-transparent text-[14px] text-heading outline-none placeholder:text-secondary"
+            />
+            <button type="button" className="flex size-6 items-center justify-center" aria-label="Voice input">
+              <MicIcon size={18} />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={submitAiPrompt}
+            className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+            aria-label="Ask AI"
+          >
+            <ArrowUpIcon size={20} />
+          </button>
+        </div>
+        <p className="text-[12px] leading-[1.25] text-secondary">
+          AI can make mistakes. Check important info. <span className="font-semibold text-heading">Learn more.</span>
+        </p>
+      </div>
+
       {/* Footer */}
       <div className="flex w-[412px] shrink-0 flex-col px-6 pb-8 pt-4">
         <div className="relative flex h-12 items-center justify-end">
@@ -440,6 +565,246 @@ function LandingPanel({ onOpen }: {
         </div>
       </div>
     </>
+  );
+}
+
+function AIEditPanel({
+  initialPrompt,
+  currentHeroSubheading,
+  onApplyHeroSubheading,
+  onViewChange,
+  onClose,
+}: {
+  initialPrompt: string;
+  currentHeroSubheading: string;
+  onApplyHeroSubheading: (value: string) => void;
+  onViewChange: (sectionId: string) => void;
+  onClose: () => void;
+}) {
+  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const aliveRef = useRef(true);
+  const didInit = useRef(false);
+  const heroSubRef = useRef(currentHeroSubheading);
+  heroSubRef.current = currentHeroSubheading;
+
+  const runPrompt = (prompt: string) => {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const thinkingId = `t-${stamp}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-${stamp}`, role: "user", text: trimmed },
+      { id: thinkingId, role: "thinking" },
+    ]);
+
+    const scenario = matchAiScenario(trimmed);
+    window.setTimeout(() => {
+      if (!aliveRef.current) return;
+      if (scenario === "heroSubtitle") {
+        const before = heroSubRef.current;
+        const after = "Expert landscape design & installation — book your free, no-obligation quote today";
+        onApplyHeroSubheading(after);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: "Done. I updated the text under your homepage headline to mention your free quotes.",
+                  summary: { title: "Updated hero text", before, after, sectionId: "hero" },
+                }
+              : m,
+          ),
+        );
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId
+              ? {
+                  id: thinkingId,
+                  role: "assistant",
+                  text: "I can help update your site. Try asking me to change a specific part — like the text under your homepage headline.",
+                }
+              : m,
+          ),
+        );
+      }
+    }, 1600);
+  };
+
+  useEffect(() => {
+    aliveRef.current = true;
+    if (!didInit.current) {
+      didInit.current = true;
+      if (initialPrompt) runPrompt(initialPrompt);
+    }
+    return () => {
+      aliveRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  const submitDraft = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    runPrompt(trimmed);
+    setDraft("");
+  };
+
+  return (
+    <>
+      {/* Dimmed breadcrumb */}
+      <div className="flex w-[412px] shrink-0 items-center gap-4 px-6 pb-6 pt-8 opacity-50">
+        <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface">
+          <CloseIcon size={20} />
+        </div>
+        <p className="text-[14px] leading-[1.25] text-secondary">
+          Website / <span className="text-heading">Setup</span>
+        </p>
+      </div>
+
+      {/* AI edit header */}
+      <div className="flex shrink-0 items-start justify-between border-b border-surface-bg px-6 pb-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[16px] font-bold leading-[1.2] text-heading">AI edit</h3>
+          <button className="text-left text-[13px] leading-[1.25] text-interactive underline">
+            How does AI help you?
+          </button>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-subtle"
+          aria-label="Collapse AI edit"
+        >
+          <ChevronDownIcon size={20} />
+        </button>
+      </div>
+
+      {/* Conversation */}
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+        {messages.map((m) => {
+          if (m.role === "user") {
+            return (
+              <div key={m.id} className="w-full rounded-lg bg-[#d6ecfb] px-3 py-2 text-[14px] leading-[1.3] text-heading">
+                {m.text}
+              </div>
+            );
+          }
+          if (m.role === "thinking") {
+            return (
+              <div key={m.id} className="flex items-center gap-2 text-[14px] leading-[1.3] text-secondary">
+                <SparkleIcon size={18} />
+                <span>Thinking...</span>
+              </div>
+            );
+          }
+          return (
+            <div key={m.id} className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <SparkleIcon size={18} className="mt-0.5 shrink-0" />
+                <p className="text-[14px] leading-[1.4] text-heading">{m.text}</p>
+              </div>
+              {m.summary && (
+                <>
+                  <AiChangeSummaryCard summary={m.summary} onView={() => onViewChange(m.summary!.sectionId)} />
+                  <div className="flex items-center gap-3 pl-6">
+                    <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Helpful">
+                      <ThumbsUpIcon size={18} />
+                    </button>
+                    <button className="flex size-7 items-center justify-center rounded-md hover:bg-surface-subtle" aria-label="Not helpful">
+                      <ThumbsDownIcon size={18} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Composer */}
+      <div className="shrink-0 px-6 pt-2">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitDraft();
+              }
+            }}
+            placeholder="Describe what you'd like updated or added"
+            className="h-12 w-full resize-none bg-transparent text-[14px] leading-[1.3] text-heading outline-none placeholder:text-secondary"
+          />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="flex size-9 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+              aria-label="Add attachment"
+            >
+              <PlusIcon size={18} color="#032B3A" />
+            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" className="flex size-9 items-center justify-center" aria-label="Voice input">
+                <MicIcon size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={submitDraft}
+                className="flex size-9 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+                aria-label="Send"
+              >
+                <ArrowUpIcon size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <p className="px-1 pt-2 text-[12px] leading-[1.25] text-secondary">
+          AI can make mistakes. Check important info. <span className="font-semibold text-heading">Learn more.</span>
+        </p>
+      </div>
+
+      {/* Footer */}
+      <div className="flex w-[412px] shrink-0 flex-col px-6 pb-8 pt-4">
+        <div className="relative flex h-12 items-center justify-end">
+          <button className="flex h-12 items-center rounded-lg bg-interactive px-5 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]">
+            Publish Website
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AiChangeSummaryCard({ summary, onView }: { summary: AiSummary; onView: () => void }) {
+  return (
+    <div className="ml-6 flex items-start gap-3 rounded-lg border border-border bg-surface p-3 shadow-[0px_1px_4px_rgba(0,0,0,0.06)]">
+      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#0f8da5]">
+        <CheckIcon size={13} color="#ffffff" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="text-[14px] font-bold leading-[1.2] text-heading">{summary.title}</p>
+        <p className="text-[12px] leading-[1.35] text-secondary">
+          “{summary.before}” → “{summary.after}”
+        </p>
+      </div>
+      <button
+        onClick={onView}
+        className="shrink-0 self-center text-[14px] font-semibold text-interactive hover:underline"
+      >
+        View →
+      </button>
+    </div>
   );
 }
 
@@ -873,6 +1238,7 @@ function Canvas({
   toggle,
   setOverlay,
   isEditMode,
+  isAiEdit,
   focusedSection,
   onEditWebsite,
   onCancelEdit,
@@ -893,6 +1259,7 @@ function Canvas({
   toggle: (o: Overlay) => void;
   setOverlay: (o: Overlay) => void;
   isEditMode: boolean;
+  isAiEdit: boolean;
   focusedSection: "hero" | "projectOverview" | null;
   onEditWebsite: () => void;
   onCancelEdit: () => void;
@@ -921,8 +1288,12 @@ function Canvas({
       if (container && section) {
         const containerRect = container.getBoundingClientRect();
         const sectionRect = section.getBoundingClientRect();
+        // The frame is rendered with a CSS transform: scale(), so bounding-rect
+        // values are scaled while scrollTop is not. Normalize by the scale factor.
+        const scale = container.offsetWidth ? containerRect.width / container.offsetWidth : 1;
+        const delta = (sectionRect.top - containerRect.top) / (scale || 1);
         container.scrollTo({
-          top: container.scrollTop + sectionRect.top - containerRect.top - 8,
+          top: container.scrollTop + delta - 8,
           behavior: "smooth",
         });
       }
@@ -999,7 +1370,7 @@ function Canvas({
         <div className="flex flex-1 items-center justify-center overflow-hidden pb-12">
           <div className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1),0px_4px_12px_0px_rgba(0,0,0,0.05)]">
             {/* Module header */}
-            {isEditMode && (
+            {(isEditMode || isAiEdit) && (
               <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border px-6 py-4">
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
                   <p className="truncate text-[14px] leading-[1.25] text-heading">
