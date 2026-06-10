@@ -84,6 +84,8 @@ function matchAiScenario(prompt: string): "heroSubtitle" | null {
     p.includes("under the title") ||
     p.includes("below the headline") ||
     p.includes("below the title") ||
+    p.includes("hero") ||
+    p.includes("headline") ||
     p.includes("free quote") ||
     p.includes("no-obligation") ||
     p.includes("no obligation")
@@ -661,7 +663,7 @@ function AIEditDrawer({
   return (
     <div
       className={`absolute bottom-0 left-0 z-30 flex w-[415px] flex-col rounded-t-2xl border border-border bg-surface shadow-[0px_-10px_30px_0px_rgba(0,0,0,0.14)] transition-[height] duration-300 ease-out ${
-        collapsed ? "h-[196px]" : "h-[640px]"
+        collapsed ? "h-[196px]" : "h-[90%]"
       }`}
     >
       {/* Drag handle */}
@@ -676,9 +678,7 @@ function AIEditDrawer({
 
       {/* Header */}
       <div className="flex shrink-0 items-center gap-3 border-b border-surface-bg px-5 pb-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#e6f3e1]">
-          <SparkleIcon size={18} color="#388523" />
-        </span>
+        <SparkleIcon size={20} className="shrink-0" />
         <p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-[1.3] text-heading">
           {headerText}
         </p>
