@@ -67,7 +67,10 @@ type LeftView =
   | "edit"
   | "heroEdit"
   | "projectEdit"
-  | "projectOverviewEdit";
+  | "projectOverviewEdit"
+  | "lawnMowingEdit"
+  | "lawnMowingHeroEdit"
+  | "imageGalleryEdit";
 
 type AiDrawerState = "closed" | "expanded" | "collapsed";
 
@@ -141,6 +144,7 @@ function matchAiScenario(prompt: string): AiScenario | null {
   return null;
 }
 type PreviewPage = "home" | "projectShowcase" | "lawnMowing";
+type FocusedSection = "hero" | "projectOverview" | "lawnMowingHero" | null;
 type HomeSectionKind = "hero" | "featured" | "servicesList" | "serviceCards" | "quote" | "imageGallery";
 type HomeSection = {
   id: string;
@@ -167,6 +171,16 @@ const DEFAULT_HOME_CONTENT: HomePageContent = {
     { id: "serviceCards", kind: "serviceCards" },
     { id: "quote", kind: "quote" },
   ],
+};
+
+type LawnMowingPageContent = {
+  heroHeading: string;
+  heroDescription: string;
+};
+
+const DEFAULT_LAWN_MOWING_CONTENT: LawnMowingPageContent = {
+  heroHeading: "Expert Lawn Mowing",
+  heroDescription: "Transform your yard with our professional lawn mowing services tailored for local homeowners.",
 };
 
 /* Scale the fixed 1440x1024 frame so it always fits the viewport. */
@@ -201,15 +215,28 @@ export default function App() {
   const [showExitEditConfirm, setShowExitEditConfirm] = useState(false);
   const [savedHomeContent, setSavedHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
   const [draftHomeContent, setDraftHomeContent] = useState<HomePageContent>(DEFAULT_HOME_CONTENT);
+  const [savedLawnMowingContent, setSavedLawnMowingContent] =
+    useState<LawnMowingPageContent>(DEFAULT_LAWN_MOWING_CONTENT);
+  const [draftLawnMowingContent, setDraftLawnMowingContent] =
+    useState<LawnMowingPageContent>(DEFAULT_LAWN_MOWING_CONTENT);
   const [addSectionTarget, setAddSectionTarget] = useState<{ mode: "append" } | { mode: "after"; sectionId: string }>({
     mode: "append",
   });
   const [pendingScrollSectionId, setPendingScrollSectionId] = useState<string | null>(null);
+  const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
+  const getEditViewForPage = (page: PreviewPage): LeftView => {
+    if (page === "projectShowcase") return "projectEdit";
+    if (page === "lawnMowing") return "lawnMowingEdit";
+    return "edit";
+  };
   const isEditMode =
     leftView === "edit" ||
     leftView === "heroEdit" ||
     leftView === "projectEdit" ||
-    leftView === "projectOverviewEdit";
+    leftView === "projectOverviewEdit" ||
+    leftView === "lawnMowingEdit" ||
+    leftView === "lawnMowingHeroEdit" ||
+    leftView === "imageGalleryEdit";
   const isAiEdit = aiDrawerState !== "closed";
 
   useEffect(() => {
@@ -222,13 +249,13 @@ export default function App() {
   const handlePreviewPageChange = (page: PreviewPage) => {
     setPreviewPage(page);
     if (isEditMode) {
-      setLeftView(page === "projectShowcase" ? "projectEdit" : "edit");
+      setLeftView(getEditViewForPage(page));
     }
   };
   const createLawnMowingPage = () => {
     setHasLawnMowingPage(true);
     setPreviewPage("lawnMowing");
-    setLeftView("edit");
+    setLeftView("lawnMowingEdit");
     setOverlay(null);
   };
   const startAiEdit = (prompt: string) => {
@@ -250,37 +277,35 @@ export default function App() {
     setAiCreatingPage(true);
     window.setTimeout(() => setAiCreatingPage(false), 1800);
   };
-  const addAiTeamGallery = () => {
-    const newSection: HomeSection = {
-      id: `teamGallery-${Date.now()}`,
-      kind: "imageGallery",
-      variant: "team",
-      images: [],
-    };
-    const insert = (c: HomePageContent) => ({ ...c, sections: [...c.sections, newSection] });
-    setSavedHomeContent(insert);
-    setDraftHomeContent(insert);
-    setPreviewPage("home");
-    setPendingScrollSectionId(newSection.id);
-  };
   const findTeamGalleryId = () => savedHomeContent.sections.find((s) => s.variant === "team")?.id ?? null;
-  const setTeamPhotos = (images: string[]) => {
-    const apply = (c: HomePageContent) => ({
-      ...c,
-      sections: c.sections.map((s) => (s.variant === "team" ? { ...s, images } : s)),
-    });
+  // Inserts the team gallery (if it does not exist yet) populated with the photos.
+  // The section is intentionally not added to the canvas until at least 3 images
+  // have been provided.
+  const applyAiTeamPhotos = (images: string[]) => {
+    const existingId = findTeamGalleryId();
+    const newSectionId = `teamGallery-${Date.now()}`;
+    const apply = (c: HomePageContent) => {
+      if (c.sections.some((s) => s.variant === "team")) {
+        return {
+          ...c,
+          sections: c.sections.map((s) => (s.variant === "team" ? { ...s, images } : s)),
+        };
+      }
+      const newSection: HomeSection = {
+        id: newSectionId,
+        kind: "imageGallery",
+        variant: "team",
+        images,
+      };
+      return { ...c, sections: [...c.sections, newSection] };
+    };
     setSavedHomeContent(apply);
     setDraftHomeContent(apply);
-  };
-  const applyAiTeamPhotos = (images: string[]) => {
-    setTeamPhotos(images);
     setPreviewPage("home");
-    const targetId = findTeamGalleryId();
-    if (targetId) {
-      setAiApplyingSectionId(targetId);
-      setPendingScrollSectionId(targetId);
-      window.setTimeout(() => setAiApplyingSectionId(null), 1800);
-    }
+    const targetId = existingId ?? newSectionId;
+    setAiApplyingSectionId(targetId);
+    setPendingScrollSectionId(targetId);
+    window.setTimeout(() => setAiApplyingSectionId(null), 1800);
   };
   const viewAiChange = (view: AiView) => {
     if (view.type === "seoSettings") {
@@ -303,16 +328,19 @@ export default function App() {
   };
   const beginEditMode = () => {
     setDraftHomeContent(savedHomeContent);
-    setLeftView(previewPage === "projectShowcase" ? "projectEdit" : "edit");
+    setDraftLawnMowingContent(savedLawnMowingContent);
+    setLeftView(getEditViewForPage(previewPage));
   };
   const discardEditMode = () => {
     setDraftHomeContent(savedHomeContent);
+    setDraftLawnMowingContent(savedLawnMowingContent);
     setShowExitEditConfirm(false);
     setPendingScrollSectionId(null);
     setLeftView("landing");
   };
   const saveEditMode = () => {
     setSavedHomeContent(draftHomeContent);
+    setSavedLawnMowingContent(draftLawnMowingContent);
     setPendingScrollSectionId(null);
     setLeftView("landing");
   };
@@ -321,9 +349,14 @@ export default function App() {
     setOverlay("addSection");
   };
   const addImageGallerySection = () => {
+    const newId = `imageGallery-${Date.now()}`;
     const nextSection: HomeSection = {
-      id: `imageGallery-${Date.now()}`,
+      id: newId,
       kind: "imageGallery",
+      // In edit mode the gallery starts empty and stays hidden on the canvas until
+      // the user uploads at least 3 images via the gallery edit panel. In preview
+      // mode there is no edit panel, so populate it immediately so it appears.
+      images: isEditMode ? [] : TEAM_PHOTO_POOL.slice(0, 3),
     };
 
     const insertSection = (current: HomePageContent) => {
@@ -343,14 +376,39 @@ export default function App() {
 
     if (isEditMode) {
       setDraftHomeContent(insertSection);
+      setEditingGalleryId(newId);
+      setLeftView("imageGalleryEdit");
     } else {
       const nextSavedContent = insertSection(savedHomeContent);
       setSavedHomeContent(nextSavedContent);
       setDraftHomeContent(nextSavedContent);
+      setPendingScrollSectionId(newId);
     }
 
-    setPendingScrollSectionId(nextSection.id);
     setOverlay(null);
+  };
+  const selectImageGallery = (sectionId: string) => {
+    setEditingGalleryId(sectionId);
+    setLeftView("imageGalleryEdit");
+  };
+  const addGalleryImages = (sectionId: string) => {
+    // Deterministic so it stays idempotent under React StrictMode's double-invoked
+    // updaters: each click grows the gallery by 3 (capped at the pool size).
+    const apply = (current: HomePageContent) => ({
+      ...current,
+      sections: current.sections.map((section) => {
+        if (section.id !== sectionId) return section;
+        const nextCount = Math.min((section.images?.length ?? 0) + 3, TEAM_PHOTO_POOL.length);
+        return { ...section, images: TEAM_PHOTO_POOL.slice(0, nextCount) };
+      }),
+    });
+    if (isEditMode) {
+      setDraftHomeContent(apply);
+    } else {
+      setSavedHomeContent(apply);
+      setDraftHomeContent(apply);
+    }
+    setPendingScrollSectionId(sectionId);
   };
   const moveHomeSection = (sectionId: string, direction: "up" | "down") => {
     const reorderSection = (current: HomePageContent) => {
@@ -395,6 +453,13 @@ export default function App() {
           onAddSection={() => openAddSection({ mode: "append" })}
           homeContent={draftHomeContent}
           onHomeContentChange={(patch) => setDraftHomeContent((current) => ({ ...current, ...patch }))}
+          lawnMowingContent={draftLawnMowingContent}
+          onLawnMowingContentChange={(patch) =>
+            setDraftLawnMowingContent((current) => ({ ...current, ...patch }))
+          }
+          editingGalleryId={editingGalleryId}
+          onSelectImageGallery={selectImageGallery}
+          onAddGalleryImages={addGalleryImages}
           onStartAiEdit={startAiEdit}
         />
         <Canvas
@@ -403,7 +468,13 @@ export default function App() {
           setOverlay={setOverlay}
           isEditMode={isEditMode}
           focusedSection={
-            leftView === "heroEdit" ? "hero" : leftView === "projectOverviewEdit" ? "projectOverview" : null
+            leftView === "heroEdit"
+              ? "hero"
+              : leftView === "projectOverviewEdit"
+                ? "projectOverview"
+                : leftView === "lawnMowingHeroEdit"
+                  ? "lawnMowingHero"
+                  : null
           }
           isAiEdit={isAiEdit}
           applyingSectionId={aiApplyingSectionId}
@@ -413,6 +484,7 @@ export default function App() {
           onSaveEdit={saveEditMode}
           onSelectHero={() => setLeftView("heroEdit")}
           onSelectProjectOverview={() => setLeftView("projectOverviewEdit")}
+          onSelectLawnMowingHero={() => setLeftView("lawnMowingHeroEdit")}
           onAddSection={(sectionId) => openAddSection({ mode: "after", sectionId })}
           onMoveSection={moveHomeSection}
           onOpenQuoteModal={() => {
@@ -424,6 +496,7 @@ export default function App() {
           onPreviewPageChange={handlePreviewPageChange}
           hasLawnMowingPage={hasLawnMowingPage}
           homeContent={isEditMode ? draftHomeContent : savedHomeContent}
+          lawnMowingContent={isEditMode ? draftLawnMowingContent : savedLawnMowingContent}
         />
 
         {/* Add page modal (triggered by + beside Home dropdown) */}
@@ -458,7 +531,6 @@ export default function App() {
             currentHeroSubheading={savedHomeContent.heroSubheading}
             onApplyHeroSubheading={applyAiHeroSubheading}
             onAddServicePage={addAiServicePage}
-            onAddTeamGallery={addAiTeamGallery}
             onApplyTeamPhotos={applyAiTeamPhotos}
             onView={viewAiChange}
           />
@@ -477,6 +549,11 @@ function Sidebar({
   onAddSection,
   homeContent,
   onHomeContentChange,
+  lawnMowingContent,
+  onLawnMowingContentChange,
+  editingGalleryId,
+  onSelectImageGallery,
+  onAddGalleryImages,
   onStartAiEdit,
 }: {
   leftView: LeftView;
@@ -485,6 +562,11 @@ function Sidebar({
   onAddSection: () => void;
   homeContent: HomePageContent;
   onHomeContentChange: (patch: Partial<HomePageContent>) => void;
+  lawnMowingContent: LawnMowingPageContent;
+  onLawnMowingContentChange: (patch: Partial<LawnMowingPageContent>) => void;
+  editingGalleryId: string | null;
+  onSelectImageGallery: (sectionId: string) => void;
+  onAddGalleryImages: (sectionId: string) => void;
   onStartAiEdit: (prompt: string) => void;
 }) {
   if (leftView === "edit") {
@@ -495,6 +577,20 @@ function Sidebar({
           onAddSection={onAddSection}
           sections={homeContent.sections}
           onSelectHero={() => setLeftView("heroEdit")}
+          onSelectImageGallery={onSelectImageGallery}
+        />
+      </div>
+    );
+  }
+
+  if (leftView === "imageGalleryEdit") {
+    const gallery = homeContent.sections.find((section) => section.id === editingGalleryId);
+    return (
+      <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
+        <ImageGalleryEditPanel
+          images={gallery?.images ?? []}
+          onBack={() => setLeftView("edit")}
+          onAddImages={() => editingGalleryId && onAddGalleryImages(editingGalleryId)}
         />
       </div>
     );
@@ -528,6 +624,30 @@ function Sidebar({
     return (
       <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
         <ProjectOverviewEditPanel onBack={() => setLeftView("projectEdit")} />
+      </div>
+    );
+  }
+
+  if (leftView === "lawnMowingEdit") {
+    return (
+      <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
+        <LawnMowingEditSectionsPanel
+          onClose={onRequestExitEdit}
+          onAddSection={onAddSection}
+          onSelectHero={() => setLeftView("lawnMowingHeroEdit")}
+        />
+      </div>
+    );
+  }
+
+  if (leftView === "lawnMowingHeroEdit") {
+    return (
+      <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
+        <LawnMowingHeroEditPanel
+          content={lawnMowingContent}
+          onContentChange={onLawnMowingContentChange}
+          onBack={() => setLeftView("lawnMowingEdit")}
+        />
       </div>
     );
   }
@@ -677,7 +797,6 @@ function AIEditDrawer({
   currentHeroSubheading,
   onApplyHeroSubheading,
   onAddServicePage,
-  onAddTeamGallery,
   onApplyTeamPhotos,
   onView,
 }: {
@@ -687,7 +806,6 @@ function AIEditDrawer({
   currentHeroSubheading: string;
   onApplyHeroSubheading: (value: string) => void;
   onAddServicePage: () => void;
-  onAddTeamGallery: () => void;
   onApplyTeamPhotos: (images: string[]) => void;
   onView: (view: AiView) => void;
 }) {
@@ -738,7 +856,6 @@ function AIEditDrawer({
           ),
         );
       } else if (scenario === "teamGallery") {
-        onAddTeamGallery();
         awaitingTeamPhotosRef.current = true;
         setMessages((prev) =>
           prev.map((m) =>
@@ -746,12 +863,7 @@ function AIEditDrawer({
               ? {
                   id: thinkingId,
                   role: "assistant",
-                  text: "Got it — I\u2019ll add an image gallery section to your homepage to show off your team. I don\u2019t have your team\u2019s photos yet, so I\u2019ve added placeholders. To set it up, upload at least 3 images of your team and I\u2019ll add them to the gallery.",
-                  summary: {
-                    title: "Added section",
-                    detail: "Home \u2192 Team image gallery (placeholders)",
-                    view: { type: "teamGallery" },
-                  },
+                  text: "Got it — I\u2019ll add an image gallery section to your homepage to show off your team. To set it up, upload at least 3 images of your team and I\u2019ll add the gallery with your photos.",
                 }
               : m,
           ),
@@ -886,14 +998,13 @@ function AIEditDrawer({
           ),
         );
       } else {
-        onApplyTeamPhotos(imgs);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === thinkingId
               ? {
                   id: thinkingId,
                   role: "assistant",
-                  text: "Thanks! I\u2019ll need at least 3 images to fill the gallery — could you add a couple more?",
+                  text: "Thanks! I\u2019ll need at least 3 images to add the gallery — could you add a couple more?",
                 }
               : m,
           ),
@@ -903,9 +1014,13 @@ function AIEditDrawer({
   };
 
   const onSend = () => (stagedImages.length > 0 ? submitImages() : submitDraft());
-  const addStagedImage = () => {
-    const next = [...stagedImages, TEAM_PHOTO_POOL[stagedImages.length % TEAM_PHOTO_POOL.length]];
-    setStagedImages(next);
+  const addStagedImages = (count = 3) => {
+    const start = stagedImages.length;
+    const additions = Array.from(
+      { length: count },
+      (_, i) => TEAM_PHOTO_POOL[(start + i) % TEAM_PHOTO_POOL.length],
+    );
+    setStagedImages([...stagedImages, ...additions]);
     setShowUploader(false);
   };
 
@@ -1107,7 +1222,7 @@ function AIEditDrawer({
             <div className="mt-4 flex flex-col items-center gap-2 rounded-lg border border-dashed border-[#9bb3bd] py-6">
               <button
                 type="button"
-                onClick={addStagedImage}
+                onClick={() => addStagedImages(3)}
                 className="rounded-lg border border-border bg-surface px-4 py-2 text-[14px] font-semibold text-interactive transition-colors hover:bg-surface-subtle"
               >
                 Select Files
@@ -1208,11 +1323,13 @@ function EditSectionsPanel({
   onAddSection,
   sections,
   onSelectHero,
+  onSelectImageGallery,
 }: {
   onClose: () => void;
   onAddSection: () => void;
   sections: HomeSection[];
   onSelectHero: () => void;
+  onSelectImageGallery: (sectionId: string) => void;
 }) {
   return (
     <>
@@ -1257,6 +1374,7 @@ function EditSectionsPanel({
                 title="Image Gallery"
                 desc="Collection of photos"
                 iconNode={<ImageIcon size={20} />}
+                onClick={() => onSelectImageGallery(section.id)}
               />
             );
           }
@@ -1361,6 +1479,69 @@ function ProjectEditSectionsPanel({
             icon={iconBrand}
             title="Photo gallery"
             desc="Upload and organize images to show off your projects."
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function LawnMowingEditSectionsPanel({
+  onClose,
+  onAddSection,
+  onSelectHero,
+}: {
+  onClose: () => void;
+  onAddSection: () => void;
+  onSelectHero: () => void;
+}) {
+  return (
+    <>
+      <div className="flex shrink-0 items-center gap-4 border-t-4 border-[#eeece7] px-8 pb-4 pt-12">
+        <button
+          onClick={onClose}
+          className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+        >
+          <CloseIcon size={20} />
+        </button>
+        <h2 className="min-w-0 flex-1 text-[16px] font-bold leading-[1.11] text-heading">
+          Edit lawn mowing page
+        </h2>
+      </div>
+
+      <div className="flex flex-1 flex-col overflow-y-auto pb-8 pt-12">
+        <div className="px-6 pb-4">
+          <button
+            onClick={onAddSection}
+            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
+          >
+            <PlusIcon size={16} color="#233D48" />
+            Add section
+          </button>
+        </div>
+        <div className="h-px w-full bg-border" />
+        <div className="flex flex-col">
+          <EditSectionRow
+            icon={iconNav}
+            title="Hero"
+            desc="Edit your service hero heading, description, and call-to-action."
+            onClick={onSelectHero}
+          />
+          <EditSectionRow
+            icon={iconStar}
+            title="Benefits"
+            desc="Highlight the reasons customers should choose this service."
+          />
+          <EditSectionRow
+            icon={iconSeo}
+            title="Call to action"
+            desc="Invite visitors to request a quote for lawn mowing."
+          />
+          <EditSectionRow icon={iconBrand} title="FAQ" desc="Answer common questions about this service." />
+          <EditSectionRow
+            icon={iconReceptionist}
+            title="Contact form"
+            desc="Let visitors request a quote or book an assessment."
           />
         </div>
       </div>
@@ -1523,6 +1704,158 @@ function HeroEditPanel({
   );
 }
 
+function ImageGalleryEditPanel({
+  images,
+  onBack,
+  onAddImages,
+}: {
+  images: string[];
+  onBack: () => void;
+  onAddImages: () => void;
+}) {
+  const needsMore = images.length < 3;
+  return (
+    <>
+      <div className="flex shrink-0 items-center gap-4 px-8 pb-8 pt-12">
+        <button
+          onClick={onBack}
+          className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+        >
+          <ChevronLeftIcon size={20} />
+        </button>
+        <h2 className="min-w-0 flex-1 text-[16px] font-bold leading-[1.11] text-heading">Image gallery</h2>
+        <button className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle">
+          <TrashIcon size={20} />
+        </button>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-2">
+        {needsMore && (
+          <div className="flex items-center gap-3 rounded-lg bg-[#e3f1f4] px-4 py-3">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#0f8da5] text-[12px] font-bold leading-none text-white">
+              i
+            </span>
+            <p className="text-[13px] leading-[1.3] text-heading">Hidden until at least 3 images are added</p>
+          </div>
+        )}
+
+        <ReadonlyField label="Tag" value="Image gallery" />
+        <ReadonlyField label="heading" value="Image gallery" />
+
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[14px] font-bold leading-[1.25] text-heading">Image</p>
+            <p className="text-[12px] leading-[1.25] text-secondary">{images.length} of 10 images added</p>
+          </div>
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {images.map((src, i) => (
+                <img key={i} src={src} alt="" className="size-[52px] rounded-md object-cover" />
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onAddImages}
+            className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-[#9bb3bd] py-5 transition-colors hover:bg-surface-subtle"
+          >
+            <span className="rounded-lg border border-border bg-surface px-4 py-2 text-[14px] font-semibold text-[#388523]">
+              Select Files
+            </span>
+            <span className="text-[12px] leading-[1.25] text-secondary">Select or drag files here to upload</span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function LawnMowingHeroEditPanel({
+  content,
+  onContentChange,
+  onBack,
+}: {
+  content: LawnMowingPageContent;
+  onContentChange: (patch: Partial<LawnMowingPageContent>) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <div className="flex shrink-0 items-center gap-4 px-8 pb-8 pt-12">
+        <button
+          onClick={onBack}
+          className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle"
+        >
+          <ChevronLeftIcon size={20} />
+        </button>
+        <h2 className="min-w-0 flex-1 text-[16px] font-bold leading-[1.11] text-heading">Edit Hero</h2>
+        <button className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-subtle">
+          <TrashIcon size={20} />
+        </button>
+      </div>
+
+      <div className="flex shrink-0 border-b border-border px-8">
+        <button className="border-b-4 border-interactive px-2 pb-3 text-[14px] font-bold leading-[1.25] text-heading">
+          Content
+        </button>
+        <button className="ml-6 px-2 pb-3 text-[14px] font-bold leading-[1.25] text-secondary">
+          Style
+        </button>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-6">
+        <div className="flex flex-col gap-2">
+          <ReadonlyField label="Heading" value={content.heroHeading} />
+          <EditableTextAreaField
+            label="Description"
+            value={content.heroDescription}
+            onChange={(value) => onContentChange({ heroDescription: value })}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-[14px] font-bold leading-[1.25] text-heading">Button</p>
+            <Toggle on />
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border bg-white">
+            <div className="flex flex-col gap-0.5 px-4 pb-3 pt-2">
+              <p className="text-[12px] leading-[1.25] text-secondary">Text</p>
+              <p className="text-[14px] leading-[1.25] text-interactive-subtle">Get a Quote</p>
+            </div>
+            <div className="h-px w-full bg-border" />
+            <div className="flex items-center justify-between gap-2 px-4 pb-3 pt-2">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-[12px] leading-[1.25] text-secondary">Link</p>
+                <p className="text-[14px] leading-[1.25] text-interactive-subtle">General inquiry</p>
+              </div>
+              <ChevronDownIcon size={18} />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[14px] font-bold leading-[1.25] text-heading">Image</p>
+            <p className="text-[12px] leading-[1.25] text-secondary">
+              Automatically cropped to fit various screen sizes
+            </p>
+          </div>
+          <img src={heroImg} alt="" className="h-[158px] w-full rounded-lg object-cover object-[55%_70%]" />
+          <div className="flex items-center gap-2">
+            <button className="h-8 rounded-md border border-border bg-surface px-3 text-[12px] font-semibold text-interactive-subtle">
+              Change Image
+            </button>
+            <button className="h-8 rounded-md px-3 text-[12px] font-semibold text-interactive-subtle">
+              Reset to Default
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ProjectOverviewEditPanel({ onBack }: { onBack: () => void }) {
   return (
     <>
@@ -1600,6 +1933,7 @@ function Canvas({
   onSaveEdit,
   onSelectHero,
   onSelectProjectOverview,
+  onSelectLawnMowingHero,
   onAddSection,
   onMoveSection,
   onOpenQuoteModal,
@@ -1609,6 +1943,7 @@ function Canvas({
   onPreviewPageChange,
   hasLawnMowingPage,
   homeContent,
+  lawnMowingContent,
 }: {
   overlay: Overlay;
   toggle: (o: Overlay) => void;
@@ -1617,12 +1952,13 @@ function Canvas({
   isAiEdit: boolean;
   applyingSectionId: string | null;
   creatingPage: boolean;
-  focusedSection: "hero" | "projectOverview" | null;
+  focusedSection: FocusedSection;
   onEditWebsite: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
   onSelectHero: () => void;
   onSelectProjectOverview: () => void;
+  onSelectLawnMowingHero: () => void;
   onAddSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, direction: "up" | "down") => void;
   onOpenQuoteModal: () => void;
@@ -1632,6 +1968,7 @@ function Canvas({
   onPreviewPageChange: (page: PreviewPage) => void;
   hasLawnMowingPage: boolean;
   homeContent: HomePageContent;
+  lawnMowingContent: LawnMowingPageContent;
 }) {
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
@@ -1778,11 +2115,13 @@ function Canvas({
                 focusedSection={focusedSection}
                 onSelectHero={onSelectHero}
                 onSelectProjectOverview={onSelectProjectOverview}
+                onSelectLawnMowingHero={onSelectLawnMowingHero}
                 onAddSection={onAddSection}
                 onMoveSection={onMoveSection}
                 onOpenQuoteModal={onOpenQuoteModal}
                 hasLawnMowingPage={hasLawnMowingPage}
                 homeContent={homeContent}
+                lawnMowingContent={lawnMowingContent}
               />
             </div>
             {creatingPage && <PagePreviewSkeleton />}
@@ -1809,23 +2148,27 @@ function WebsitePreview({
   focusedSection,
   onSelectHero,
   onSelectProjectOverview,
+  onSelectLawnMowingHero,
   onAddSection,
   onMoveSection,
   onOpenQuoteModal,
   hasLawnMowingPage,
   homeContent,
+  lawnMowingContent,
 }: {
   previewPage: PreviewPage;
   isEditMode: boolean;
   applyingSectionId: string | null;
-  focusedSection: "hero" | "projectOverview" | null;
+  focusedSection: FocusedSection;
   onSelectHero: () => void;
   onSelectProjectOverview: () => void;
+  onSelectLawnMowingHero: () => void;
   onAddSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, direction: "up" | "down") => void;
   onOpenQuoteModal: () => void;
   hasLawnMowingPage: boolean;
   homeContent: HomePageContent;
+  lawnMowingContent: LawnMowingPageContent;
 }) {
   if (previewPage === "projectShowcase") {
     return (
@@ -1839,7 +2182,16 @@ function WebsitePreview({
   }
 
   if (previewPage === "lawnMowing" && hasLawnMowingPage) {
-    return <LawnMowingPreview isEditMode={isEditMode} onAddSection={onAddSection} onOpenQuoteModal={onOpenQuoteModal} />;
+    return (
+      <LawnMowingPreview
+        isEditMode={isEditMode}
+        focusedSection={focusedSection}
+        content={lawnMowingContent}
+        onSelectHero={onSelectLawnMowingHero}
+        onAddSection={onAddSection}
+        onOpenQuoteModal={onOpenQuoteModal}
+      />
+    );
   }
 
   return (
@@ -1871,12 +2223,14 @@ function WebsitePreview({
         </div>
       </div>
 
-      {homeContent.sections.map((section, index) => (
+      {homeContent.sections
+        .filter((section) => !(section.kind === "imageGallery" && (section.images?.length ?? 0) < 3))
+        .map((section, index, visibleSections) => (
         <HomePreviewSection
           key={section.id}
           section={section}
           canMoveUp={index > 0}
-          canMoveDown={index < homeContent.sections.length - 1}
+          canMoveDown={index < visibleSections.length - 1}
           isEditMode={isEditMode}
           applying={applyingSectionId === section.id}
           focusedSection={focusedSection}
@@ -2018,7 +2372,7 @@ function HomePreviewSection({
   canMoveDown: boolean;
   isEditMode: boolean;
   applying: boolean;
-  focusedSection: "hero" | "projectOverview" | null;
+  focusedSection: FocusedSection;
   onSelectHero: () => void;
   onAddSection: () => void;
   onMoveUp: () => void;
@@ -2212,7 +2566,7 @@ function HomeImageGallerySection({
   canMoveDown: boolean;
 }) {
   const isTeam = variant === "team";
-  const teamPhotos = images ?? [];
+  const photos = images ?? [];
 
   return (
     <EditableSection
@@ -2235,41 +2589,11 @@ function HomeImageGallerySection({
             {isTeam ? "Meet our team" : "Get inspired by our work"}
           </h2>
         </div>
-        {isTeam ? (
-          <div className="grid w-full grid-cols-3 gap-4">
-            {Array.from({ length: Math.max(6, teamPhotos.length) }).map((_, i) =>
-              teamPhotos[i] ? (
-                <img
-                  key={i}
-                  src={teamPhotos[i]}
-                  alt=""
-                  className="h-[260px] w-full rounded-lg object-cover"
-                />
-              ) : (
-                <div
-                  key={i}
-                  className="flex h-[260px] w-full items-center justify-center rounded-lg border border-dashed border-[#9bb3bd] bg-[rgba(56,101,118,0.08)]"
-                >
-                  <ImageIcon size={40} color="#6f8a95" />
-                </div>
-              ),
-            )}
-          </div>
-        ) : (
-          <div className="grid h-[645px] w-full grid-cols-3 gap-4">
-            <div className="flex min-w-0 flex-col gap-4">
-              <img src={projectGallery1} alt="" className="h-[317px] w-full object-cover" />
-              <img src={projectGallery2} alt="" className="h-[312px] w-full object-cover" />
-            </div>
-            <div className="flex min-w-0 flex-col gap-4">
-              <img src={projectGallery3} alt="" className="h-[187px] w-full object-cover" />
-              <img src={projectGallery4} alt="" className="h-[439px] w-full object-cover" />
-            </div>
-            <div className="flex min-w-0 flex-col">
-              <img src={projectGallery5} alt="" className="h-[640px] w-full object-cover" />
-            </div>
-          </div>
-        )}
+        <div className="grid w-full grid-cols-3 gap-4">
+          {photos.map((src, i) => (
+            <img key={i} src={src} alt="" className="h-[260px] w-full rounded-lg object-cover" />
+          ))}
+        </div>
       </div>
     </EditableSection>
   );
@@ -2396,10 +2720,16 @@ function PreviewInput({
 
 function LawnMowingPreview({
   isEditMode,
+  focusedSection,
+  content,
+  onSelectHero,
   onAddSection,
   onOpenQuoteModal,
 }: {
   isEditMode: boolean;
+  focusedSection: FocusedSection;
+  content: LawnMowingPageContent;
+  onSelectHero: () => void;
   onAddSection: (sectionId: string) => void;
   onOpenQuoteModal: () => void;
 }) {
@@ -2432,13 +2762,17 @@ function LawnMowingPreview({
       <EditableSection
         sectionId="lawnMowingHero"
         editable={isEditMode}
+        focused={focusedSection === "lawnMowingHero"}
+        label="Editing Hero Section"
+        onClick={isEditMode ? onSelectHero : undefined}
         onAddSection={() => onAddSection("lawnMowingHero")}
+        onEdit={onSelectHero}
         className="flex min-h-[270px] items-stretch bg-brand"
       >
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-6 px-8 py-16 text-white">
-          <h1 className="text-[36px] font-black leading-[1.11]">Expert Lawn Mowing</h1>
+          <h1 className="text-[36px] font-black leading-[1.11]">{content.heroHeading}</h1>
           <p className="max-w-[420px] text-[16px] font-bold leading-[1.2]">
-            Transform your yard with our professional lawn mowing services tailored for local homeowners.
+            {content.heroDescription}
           </p>
         </div>
         <div className="relative w-[52%] shrink-0 overflow-hidden">
@@ -2561,7 +2895,7 @@ function ProjectShowcasePreview({
   onAddSection,
 }: {
   isEditMode: boolean;
-  focusedSection: "hero" | "projectOverview" | null;
+  focusedSection: FocusedSection;
   onSelectProjectOverview: () => void;
   onAddSection: (sectionId: string) => void;
 }) {
@@ -3341,6 +3675,10 @@ function AiPromptBar() {
 }
 
 function SeoBody() {
+  const [siteTitle, setSiteTitle] = useState("AwesomeJaya: Trusted painting services in Toronto");
+  const [siteDescription, setSiteDescription] = useState(
+    "AwesomeJaya offers expert interior and exterior painting services in Toronto. Enjoy transparent pricing, clear communication, and fast response times from licensed painters.",
+  );
   return (
     <div className="flex flex-col gap-6 px-8 pt-6">
       <div className="flex flex-col gap-4">
@@ -3351,23 +3689,15 @@ function SeoBody() {
             search results.
           </p>
         </div>
-        <ReadonlyField label="Site Title" value="AwesomeJaya: Trusted painting services in Toronto" />
-        <ReadonlyField
-          label="Site Description"
-          value="AwesomeJaya offers expert interior and exterior painting services in Toronto. Enjoy transparent pricing, clear communication, and fast response times from licensed painters."
-        />
+        <EditableTextField label="Site Title" value={siteTitle} onChange={setSiteTitle} />
+        <EditableTextAreaField label="Site Description" value={siteDescription} onChange={setSiteDescription} />
       </div>
       <div className="flex flex-col gap-4">
         <h3 className="text-[16px] font-bold leading-[1.11] text-heading">Preview</h3>
         <div className="rounded-lg border border-border p-3">
           <p className="text-[12px] leading-[1.4] text-secondary">awesomejaya.jobbersites.com</p>
-          <p className="mt-1 text-[14px] font-medium leading-[1.3] text-[#1a0dab]">
-            AwesomeJaya: Trusted painting services in Toronto
-          </p>
-          <p className="mt-1 text-[12px] leading-[1.4] text-secondary">
-            AwesomeJaya offers expert interior and exterior painting services in Toronto. Enjoy transparent
-            pricing, clear communication, and fast response times from licensed painters.
-          </p>
+          <p className="mt-1 text-[14px] font-medium leading-[1.3] text-[#1a0dab]">{siteTitle}</p>
+          <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.4] text-secondary">{siteDescription}</p>
         </div>
       </div>
     </div>
@@ -3478,6 +3808,28 @@ function EditableTextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="w-full bg-transparent text-[14px] leading-[1.4] text-interactive-subtle outline-none"
+      />
+    </label>
+  );
+}
+
+function EditableTextAreaField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1 rounded-lg border border-border bg-white px-4 pb-4 pt-3 focus-within:border-interactive">
+      <span className="text-[12px] leading-[1.25] text-secondary">{label}</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={4}
+        className="w-full resize-none bg-transparent text-[14px] leading-[1.4] text-interactive-subtle outline-none"
       />
     </label>
   );
