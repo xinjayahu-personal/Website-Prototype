@@ -816,7 +816,6 @@ function AIEditDrawer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const aliveRef = useRef(true);
   const didInit = useRef(false);
-  const awaitingServiceDescRef = useRef(false);
   const awaitingTeamPhotosRef = useRef(false);
   const heroSubRef = useRef(currentHeroSubheading);
   heroSubRef.current = currentHeroSubheading;
@@ -833,29 +832,10 @@ function AIEditDrawer({
       { id: thinkingId, role: "thinking" },
     ]);
 
-    const isServiceFollowup = awaitingServiceDescRef.current;
-    awaitingServiceDescRef.current = false;
-    const scenario = isServiceFollowup ? null : matchAiScenario(trimmed);
+    const scenario = matchAiScenario(trimmed);
     window.setTimeout(() => {
       if (!aliveRef.current) return;
-      if (isServiceFollowup) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === thinkingId
-              ? {
-                  id: thinkingId,
-                  role: "assistant",
-                  text: "Done — I\u2019ve updated the page with your description and linked it under your Services menu. Want to add anything else here, like photos, pricing, or a contact form?",
-                  summary: {
-                    title: "Updated page content",
-                    detail: '"Lawn mowing" \u2192 description + Services menu link',
-                    view: { type: "page", page: "lawnMowing" },
-                  },
-                }
-              : m,
-          ),
-        );
-      } else if (scenario === "teamGallery") {
+      if (scenario === "teamGallery") {
         awaitingTeamPhotosRef.current = true;
         setMessages((prev) =>
           prev.map((m) =>
@@ -870,14 +850,13 @@ function AIEditDrawer({
         );
       } else if (scenario === "addServicePage") {
         onAddServicePage();
-        awaitingServiceDescRef.current = true;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === thinkingId
               ? {
                   id: thinkingId,
                   role: "assistant",
-                  text: 'Got it — I\u2019ll add a new Lawn mowing service page. It has a hero section, a short description of the service, a FAQ section and a "Get a Quote" button, and I\u2019ve added this page to your navigation. I used placeholder text and images for the description — want to tell me a bit about this service so I can fill it in?',
+                  text: 'Got it — I added a new Lawn mowing service page. It has a hero section, a short description of the service, a FAQ section and a "Get a Quote" button, and I\u2019ve added this page to your navigation.',
                   summary: {
                     title: "Added new page",
                     detail: 'New page: "Lawn mowing" (added to navigation)',
@@ -3241,7 +3220,6 @@ function ServicePagePromptModal({
   onCreatePage: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
-  const canCreate = prompt.trim().length > 0;
 
   return (
     <div
@@ -3253,7 +3231,7 @@ function ServicePagePromptModal({
         onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
-          if (canCreate) onCreatePage();
+          onCreatePage();
         }}
         className="flex w-[626px] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-[0px_4px_12px_rgba(0,0,0,0.08),0px_1px_4px_rgba(0,0,0,0.1)]"
         role="dialog"
@@ -3320,8 +3298,7 @@ function ServicePagePromptModal({
           </button>
           <button
             type="submit"
-            disabled={!canCreate}
-            className="h-10 rounded-lg bg-[#0f8da5] px-4 text-[14px] font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-10 rounded-lg bg-[#0f8da5] px-4 text-[14px] font-semibold text-white transition hover:brightness-95"
           >
             Create Page
           </button>
