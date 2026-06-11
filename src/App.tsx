@@ -263,28 +263,30 @@ export default function App() {
     setPreviewPage("home");
     setPendingScrollSectionId(newSection.id);
   };
-  const applyAiTeamPhotos = (images: string[]) => {
-    let targetId: string | null = null;
+  const findTeamGalleryId = () => savedHomeContent.sections.find((s) => s.variant === "team")?.id ?? null;
+  const setTeamPhotos = (images: string[]) => {
     const apply = (c: HomePageContent) => ({
       ...c,
-      sections: c.sections.map((s) => {
-        if (s.variant === "team") {
-          targetId = s.id;
-          return { ...s, images };
-        }
-        return s;
-      }),
+      sections: c.sections.map((s) => (s.variant === "team" ? { ...s, images } : s)),
     });
     setSavedHomeContent(apply);
     setDraftHomeContent(apply);
+  };
+  const previewTeamPhotos = (images: string[]) => {
+    setTeamPhotos(images);
+    const targetId = findTeamGalleryId();
+    if (targetId) setPendingScrollSectionId(targetId);
+  };
+  const applyAiTeamPhotos = (images: string[]) => {
+    setTeamPhotos(images);
     setPreviewPage("home");
+    const targetId = findTeamGalleryId();
     if (targetId) {
       setAiApplyingSectionId(targetId);
       setPendingScrollSectionId(targetId);
       window.setTimeout(() => setAiApplyingSectionId(null), 1800);
     }
   };
-  const findTeamGalleryId = () => savedHomeContent.sections.find((s) => s.variant === "team")?.id ?? null;
   const viewAiChange = (view: AiView) => {
     if (view.type === "seoSettings") {
       setLeftView("seo");
@@ -462,6 +464,7 @@ export default function App() {
             onApplyHeroSubheading={applyAiHeroSubheading}
             onAddServicePage={addAiServicePage}
             onAddTeamGallery={addAiTeamGallery}
+            onStageTeamPhotos={previewTeamPhotos}
             onApplyTeamPhotos={applyAiTeamPhotos}
             onView={viewAiChange}
           />
@@ -681,6 +684,7 @@ function AIEditDrawer({
   onApplyHeroSubheading,
   onAddServicePage,
   onAddTeamGallery,
+  onStageTeamPhotos,
   onApplyTeamPhotos,
   onView,
 }: {
@@ -691,6 +695,7 @@ function AIEditDrawer({
   onApplyHeroSubheading: (value: string) => void;
   onAddServicePage: () => void;
   onAddTeamGallery: () => void;
+  onStageTeamPhotos: (images: string[]) => void;
   onApplyTeamPhotos: (images: string[]) => void;
   onView: (view: AiView) => void;
 }) {
@@ -906,7 +911,9 @@ function AIEditDrawer({
 
   const onSend = () => (stagedImages.length > 0 ? submitImages() : submitDraft());
   const addStagedImage = () => {
-    setStagedImages((prev) => [...prev, TEAM_PHOTO_POOL[prev.length % TEAM_PHOTO_POOL.length]]);
+    const next = [...stagedImages, TEAM_PHOTO_POOL[stagedImages.length % TEAM_PHOTO_POOL.length]];
+    setStagedImages(next);
+    onStageTeamPhotos(next);
     setShowUploader(false);
   };
 
@@ -1639,7 +1646,7 @@ function Canvas({
   useEffect(() => {
     if (!scrollToSectionId || previewPage !== "home") return;
 
-    const frame = requestAnimationFrame(() => {
+    const timer = window.setTimeout(() => {
       const container = previewScrollRef.current;
       const section = document.getElementById(`preview-section-${scrollToSectionId}`);
 
@@ -1650,16 +1657,15 @@ function Canvas({
         // values are scaled while scrollTop is not. Normalize by the scale factor.
         const scale = container.offsetWidth ? containerRect.width / container.offsetWidth : 1;
         const delta = (sectionRect.top - containerRect.top) / (scale || 1);
-        container.scrollTo({
-          top: container.scrollTop + delta - 8,
-          behavior: "smooth",
-        });
+        // Instant (not smooth): the state reset below triggers a re-render that
+        // would otherwise abort an in-flight smooth-scroll animation.
+        container.scrollTo({ top: container.scrollTop + delta - 8 });
       }
 
       onScrollToSectionHandled();
-    });
+    }, 90);
 
-    return () => cancelAnimationFrame(frame);
+    return () => window.clearTimeout(timer);
   }, [homeContent.sections, onScrollToSectionHandled, previewPage, scrollToSectionId]);
 
   return (
