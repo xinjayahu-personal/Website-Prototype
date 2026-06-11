@@ -310,7 +310,7 @@ export default function App() {
   const viewAiChange = (view: AiView) => {
     if (view.type === "seoSettings") {
       setLeftView("seo");
-      setAiDrawerState("collapsed");
+      setAiDrawerState("closed");
       return;
     }
     if (view.type === "page") {
@@ -1627,9 +1627,10 @@ function HeroEditPanel({
             value={content.heroHeading}
             onChange={(value) => onContentChange({ heroHeading: value })}
           />
-          <ReadonlyField
+          <EditableTextAreaField
             label="Subheading"
             value={content.heroSubheading}
+            onChange={(value) => onContentChange({ heroSubheading: value })}
           />
         </div>
 
@@ -3642,6 +3643,7 @@ function ToolFooter({ onCancel, children }: { onCancel: () => void; children?: R
           Cancel
         </button>
         <button
+          onClick={onCancel}
           style={{ backgroundColor: SAVE_GREEN }}
           className="h-10 flex-1 rounded-lg text-[14px] font-semibold text-white transition hover:brightness-95"
         >
