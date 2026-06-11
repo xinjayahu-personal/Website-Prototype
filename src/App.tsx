@@ -272,11 +272,6 @@ export default function App() {
     setSavedHomeContent(apply);
     setDraftHomeContent(apply);
   };
-  const previewTeamPhotos = (images: string[]) => {
-    setTeamPhotos(images);
-    const targetId = findTeamGalleryId();
-    if (targetId) setPendingScrollSectionId(targetId);
-  };
   const applyAiTeamPhotos = (images: string[]) => {
     setTeamPhotos(images);
     setPreviewPage("home");
@@ -464,7 +459,6 @@ export default function App() {
             onApplyHeroSubheading={applyAiHeroSubheading}
             onAddServicePage={addAiServicePage}
             onAddTeamGallery={addAiTeamGallery}
-            onStageTeamPhotos={previewTeamPhotos}
             onApplyTeamPhotos={applyAiTeamPhotos}
             onView={viewAiChange}
           />
@@ -684,7 +678,6 @@ function AIEditDrawer({
   onApplyHeroSubheading,
   onAddServicePage,
   onAddTeamGallery,
-  onStageTeamPhotos,
   onApplyTeamPhotos,
   onView,
 }: {
@@ -695,7 +688,6 @@ function AIEditDrawer({
   onApplyHeroSubheading: (value: string) => void;
   onAddServicePage: () => void;
   onAddTeamGallery: () => void;
-  onStageTeamPhotos: (images: string[]) => void;
   onApplyTeamPhotos: (images: string[]) => void;
   onView: (view: AiView) => void;
 }) {
@@ -894,6 +886,7 @@ function AIEditDrawer({
           ),
         );
       } else {
+        onApplyTeamPhotos(imgs);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === thinkingId
@@ -913,7 +906,6 @@ function AIEditDrawer({
   const addStagedImage = () => {
     const next = [...stagedImages, TEAM_PHOTO_POOL[stagedImages.length % TEAM_PHOTO_POOL.length]];
     setStagedImages(next);
-    onStageTeamPhotos(next);
     setShowUploader(false);
   };
 
@@ -2244,24 +2236,25 @@ function HomeImageGallerySection({
           </h2>
         </div>
         {isTeam ? (
-          teamPhotos.length > 0 ? (
-            <div className="grid w-full grid-cols-3 gap-4">
-              {teamPhotos.map((src, i) => (
-                <img key={i} src={src} alt="" className="h-[260px] w-full rounded-lg object-cover" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid w-full grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid w-full grid-cols-3 gap-4">
+            {Array.from({ length: Math.max(6, teamPhotos.length) }).map((_, i) =>
+              teamPhotos[i] ? (
+                <img
+                  key={i}
+                  src={teamPhotos[i]}
+                  alt=""
+                  className="h-[260px] w-full rounded-lg object-cover"
+                />
+              ) : (
                 <div
                   key={i}
                   className="flex h-[260px] w-full items-center justify-center rounded-lg border border-dashed border-[#9bb3bd] bg-[rgba(56,101,118,0.08)]"
                 >
                   <ImageIcon size={40} color="#6f8a95" />
                 </div>
-              ))}
-            </div>
-          )
+              ),
+            )}
+          </div>
         ) : (
           <div className="grid h-[645px] w-full grid-cols-3 gap-4">
             <div className="flex min-w-0 flex-col gap-4">
