@@ -253,10 +253,14 @@ export default function App() {
     }
   };
   const createLawnMowingPage = () => {
-    setHasLawnMowingPage(true);
-    setPreviewPage("lawnMowing");
-    setLeftView("lawnMowingEdit");
     setOverlay(null);
+    setAiCreatingPage(true);
+    window.setTimeout(() => {
+      setHasLawnMowingPage(true);
+      setPreviewPage("lawnMowing");
+      setLeftView("lawnMowingEdit");
+      setAiCreatingPage(false);
+    }, 5000);
   };
   const startAiEdit = (prompt: string) => {
     setAiInitialPrompt(prompt);
@@ -305,7 +309,7 @@ export default function App() {
     const targetId = existingId ?? newSectionId;
     setAiApplyingSectionId(targetId);
     setPendingScrollSectionId(targetId);
-    window.setTimeout(() => setAiApplyingSectionId(null), 1800);
+    window.setTimeout(() => setAiApplyingSectionId(null), 5000);
   };
   const viewAiChange = (view: AiView) => {
     if (view.type === "seoSettings") {
@@ -409,6 +413,12 @@ export default function App() {
       setDraftHomeContent(apply);
     }
     setPendingScrollSectionId(sectionId);
+
+    // Adding images always brings the gallery to at least 3, so it now appears
+    // on the canvas. Show the section skeleton for 5s while it "loads" (matches
+    // the AI workflow).
+    setAiApplyingSectionId(sectionId);
+    window.setTimeout(() => setAiApplyingSectionId(null), 5000);
   };
   const moveHomeSection = (sectionId: string, direction: "up" | "down") => {
     const reorderSection = (current: HomePageContent) => {
@@ -2072,12 +2082,12 @@ function Canvas({
                       />
                     )}
                   </div>
-                  {/* + add page */}
+                  {/* add page */}
                   <button
                     onClick={() => toggle("addPage")}
-                    className="flex size-9 items-center justify-center rounded-lg bg-heading transition-colors hover:bg-[#063546]"
+                    className="flex h-9 items-center justify-center rounded-lg bg-heading px-4 text-[14px] font-semibold text-white transition-colors hover:bg-[#063546]"
                   >
-                    <PlusIcon size={18} color="#ffffff" />
+                    Add Page
                   </button>
                 </div>
               </div>
