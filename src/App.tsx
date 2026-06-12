@@ -39,7 +39,6 @@ import {
   ChevronLeftIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  MicIcon,
   ImageIcon,
 } from "./Icons";
 
@@ -1028,12 +1027,12 @@ function Canvas({
                       />
                     )}
                   </div>
-                  {/* + add page */}
+                  {/* Add page */}
                   <button
                     onClick={() => toggle("addPage")}
-                    className="flex size-9 items-center justify-center rounded-lg bg-heading transition-colors hover:bg-[#063546]"
+                    className="flex h-9 items-center justify-center rounded-lg bg-heading px-4 text-[14px] font-semibold text-white transition-colors hover:bg-[#063546]"
                   >
-                    <PlusIcon size={18} color="#ffffff" />
+                    Add page
                   </button>
                 </div>
               </div>
@@ -2471,15 +2470,14 @@ function ToolView({ view, onBack }: { view: ToolViewKey; onBack: () => void }) {
         {view === "brand" && <BrandBody />}
       </div>
 
-      <ToolFooter onCancel={onBack}>{view === "seo" && <AiPromptBar />}</ToolFooter>
+      <ToolFooter onCancel={onBack} />
     </>
   );
 }
 
-function ToolFooter({ onCancel, children }: { onCancel: () => void; children?: ReactNode }) {
+function ToolFooter({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="shrink-0 bg-surface px-6 pb-8 pt-4">
-      {children}
       <div className="flex items-center gap-2">
         <button
           onClick={onCancel}
@@ -2494,28 +2492,6 @@ function ToolFooter({ onCancel, children }: { onCancel: () => void; children?: R
           Save
         </button>
       </div>
-    </div>
-  );
-}
-
-function AiPromptBar() {
-  return (
-    <div className="mb-4 flex flex-col gap-2">
-      <div className="flex items-start gap-3">
-        <div className="flex h-12 flex-1 items-center gap-2 rounded-lg border border-border px-3">
-          <input
-            placeholder="Enter a prompt here"
-            className="min-w-0 flex-1 bg-transparent text-[14px] text-heading outline-none placeholder:text-secondary"
-          />
-          <MicIcon size={20} />
-        </div>
-        <button className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border transition-colors hover:bg-surface-subtle">
-          <ArrowUpIcon size={20} />
-        </button>
-      </div>
-      <p className="text-[12px] leading-[1.25] text-secondary">
-        AI can make mistakes. Check important info. <span className="font-semibold">Learn more.</span>
-      </p>
     </div>
   );
 }
