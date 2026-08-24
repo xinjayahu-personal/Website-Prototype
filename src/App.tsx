@@ -230,7 +230,10 @@ export default function App() {
           leftView={leftView}
           setLeftView={setLeftView}
           onRequestExitEdit={() => setShowExitEditConfirm(true)}
+          onAddPage={() => setOverlay("addPage")}
           onAddSection={() => openAddSection({ mode: "append" })}
+          onCancelEdit={discardEditMode}
+          onSaveEdit={saveEditMode}
           homeContent={draftHomeContent}
           onHomeContentChange={(patch) => setDraftHomeContent((current) => ({ ...current, ...patch }))}
         />
@@ -244,7 +247,6 @@ export default function App() {
           }
           onEditWebsite={beginEditMode}
           onCancelEdit={discardEditMode}
-          onSaveEdit={saveEditMode}
           onSelectHero={() => setLeftView("heroEdit")}
           onSelectProjectOverview={() => setLeftView("projectOverviewEdit")}
           onAddSection={(sectionId) => openAddSection({ mode: "after", sectionId })}
@@ -293,14 +295,20 @@ function Sidebar({
   leftView,
   setLeftView,
   onRequestExitEdit,
+  onAddPage,
   onAddSection,
+  onCancelEdit,
+  onSaveEdit,
   homeContent,
   onHomeContentChange,
 }: {
   leftView: LeftView;
   setLeftView: (v: LeftView) => void;
   onRequestExitEdit: () => void;
+  onAddPage: () => void;
   onAddSection: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
   homeContent: HomePageContent;
   onHomeContentChange: (patch: Partial<HomePageContent>) => void;
 }) {
@@ -309,7 +317,10 @@ function Sidebar({
       <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
         <EditSectionsPanel
           onClose={onRequestExitEdit}
+          onAddPage={onAddPage}
           onAddSection={onAddSection}
+          onCancel={onCancelEdit}
+          onSave={onSaveEdit}
           sections={homeContent.sections}
           onSelectHero={() => setLeftView("heroEdit")}
         />
@@ -324,6 +335,8 @@ function Sidebar({
           content={homeContent}
           onContentChange={onHomeContentChange}
           onBack={() => setLeftView("edit")}
+          onCancel={onCancelEdit}
+          onSave={onSaveEdit}
         />
       </div>
     );
@@ -334,7 +347,10 @@ function Sidebar({
       <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
         <ProjectEditSectionsPanel
           onClose={onRequestExitEdit}
+          onAddPage={onAddPage}
           onAddSection={onAddSection}
+          onCancel={onCancelEdit}
+          onSave={onSaveEdit}
           onSelectProjectOverview={() => setLeftView("projectOverviewEdit")}
         />
       </div>
@@ -344,7 +360,11 @@ function Sidebar({
   if (leftView === "projectOverviewEdit") {
     return (
       <div className="flex h-full w-[415px] shrink-0 flex-col overflow-hidden bg-surface">
-        <ProjectOverviewEditPanel onBack={() => setLeftView("projectEdit")} />
+        <ProjectOverviewEditPanel
+          onBack={() => setLeftView("projectEdit")}
+          onCancel={onCancelEdit}
+          onSave={onSaveEdit}
+        />
       </div>
     );
   }
@@ -484,14 +504,81 @@ function SidebarLink({
   );
 }
 
+function AddNewButton({
+  onAddPage,
+  onAddSection,
+}: {
+  onAddPage: () => void;
+  onAddSection: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <PlusIcon size={16} color="#233D48" />
+        Add New
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-30 mt-2 w-[200px] rounded-lg border border-border bg-surface p-2 shadow-[0px_4px_6px_rgba(0,0,0,0.08),0px_1px_2px_rgba(0,0,0,0.1)]"
+          role="menu"
+        >
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onAddPage();
+            }}
+            className="flex h-11 w-full items-center rounded-md px-2 text-left text-[14px] font-semibold text-heading transition-colors hover:bg-surface-subtle"
+          >
+            Add page
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onAddSection();
+            }}
+            className="flex h-11 w-full items-center rounded-md px-2 text-left text-[14px] font-semibold text-heading transition-colors hover:bg-surface-subtle"
+          >
+            Add section
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EditSectionsPanel({
   onClose,
+  onAddPage,
   onAddSection,
+  onCancel,
+  onSave,
   sections,
   onSelectHero,
 }: {
   onClose: () => void;
+  onAddPage: () => void;
   onAddSection: () => void;
+  onCancel: () => void;
+  onSave: () => void;
   sections: HomeSection[];
   onSelectHero: () => void;
 }) {
@@ -509,13 +596,7 @@ function EditSectionsPanel({
 
       <div className="flex flex-1 flex-col overflow-y-auto px-4">
         <div className="px-4 pb-4">
-          <button
-            onClick={onAddSection}
-            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
-          >
-            <PlusIcon size={16} color="#233D48" />
-            Add section
-          </button>
+          <AddNewButton onAddPage={onAddPage} onAddSection={onAddSection} />
         </div>
 
         {sections.map((section) => {
@@ -588,17 +669,25 @@ function EditSectionsPanel({
           );
         })}
       </div>
+
+      <ToolFooter onCancel={onCancel} onSave={onSave} />
     </>
   );
 }
 
 function ProjectEditSectionsPanel({
   onClose,
+  onAddPage,
   onAddSection,
+  onCancel,
+  onSave,
   onSelectProjectOverview,
 }: {
   onClose: () => void;
+  onAddPage: () => void;
   onAddSection: () => void;
+  onCancel: () => void;
+  onSave: () => void;
   onSelectProjectOverview: () => void;
 }) {
   return (
@@ -617,13 +706,7 @@ function ProjectEditSectionsPanel({
 
       <div className="flex flex-1 flex-col overflow-y-auto pb-8 pt-12">
         <div className="px-6 pb-4">
-          <button
-            onClick={onAddSection}
-            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
-          >
-            <PlusIcon size={16} color="#233D48" />
-            Add section
-          </button>
+          <AddNewButton onAddPage={onAddPage} onAddSection={onAddSection} />
         </div>
         <div className="h-px w-full bg-border" />
         <div className="flex flex-col">
@@ -645,6 +728,8 @@ function ProjectEditSectionsPanel({
           />
         </div>
       </div>
+
+      <ToolFooter onCancel={onCancel} onSave={onSave} />
     </>
   );
 }
@@ -691,10 +776,14 @@ function HeroEditPanel({
   content,
   onContentChange,
   onBack,
+  onCancel,
+  onSave,
 }: {
   content: HomePageContent;
   onContentChange: (patch: Partial<HomePageContent>) => void;
   onBack: () => void;
+  onCancel: () => void;
+  onSave: () => void;
 }) {
   return (
     <>
@@ -800,11 +889,21 @@ function HeroEditPanel({
           </div>
         </div>
       </div>
+
+      <ToolFooter onCancel={onCancel} onSave={onSave} />
     </>
   );
 }
 
-function ProjectOverviewEditPanel({ onBack }: { onBack: () => void }) {
+function ProjectOverviewEditPanel({
+  onBack,
+  onCancel,
+  onSave,
+}: {
+  onBack: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
   return (
     <>
       <div className="flex shrink-0 items-center gap-4 px-8 pb-8 pt-12">
@@ -861,6 +960,8 @@ function ProjectOverviewEditPanel({ onBack }: { onBack: () => void }) {
           />
         </div>
       </div>
+
+      <ToolFooter onCancel={onCancel} onSave={onSave} />
     </>
   );
 }
@@ -875,7 +976,6 @@ function Canvas({
   focusedSection,
   onEditWebsite,
   onCancelEdit,
-  onSaveEdit,
   onSelectHero,
   onSelectProjectOverview,
   onAddSection,
@@ -895,7 +995,6 @@ function Canvas({
   focusedSection: "hero" | "projectOverview" | null;
   onEditWebsite: () => void;
   onCancelEdit: () => void;
-  onSaveEdit: () => void;
   onSelectHero: () => void;
   onSelectProjectOverview: () => void;
   onAddSection: (sectionId: string) => void;
@@ -960,26 +1059,20 @@ function Canvas({
                 <MoreIcon size={20} />
               </button>
               {isEditMode ? (
-                <>
-                  <button
-                    onClick={onCancelEdit}
-                    className="flex h-10 items-center rounded-lg border border-border bg-surface px-5 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={onSaveEdit}
-                    className="flex h-10 items-center rounded-lg bg-interactive px-6 text-[14px] font-semibold text-white transition-colors hover:bg-[#2f7d20]"
-                  >
-                    Save
-                  </button>
-                </>
+                <button
+                  key="cancel-edit"
+                  onClick={onCancelEdit}
+                  className="flex h-10 items-center rounded-lg border border-border bg-white px-5 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
+                >
+                  Cancel Edit
+                </button>
               ) : (
                 <button
+                  key="edit-website"
                   onClick={onEditWebsite}
-                  className="flex h-10 items-center gap-1.5 rounded-lg border border-border bg-surface px-4 text-[14px] font-semibold text-interactive-subtle transition-colors hover:bg-surface-subtle"
+                  className="flex h-10 items-center gap-1.5 rounded-lg bg-heading px-4 text-[14px] font-semibold text-white transition hover:brightness-95"
                 >
-                  <PencilIcon size={18} />
+                  <PencilIcon size={18} color="#ffffff" />
                   Edit Website
                 </button>
               )}
@@ -2475,7 +2568,7 @@ function ToolView({ view, onBack }: { view: ToolViewKey; onBack: () => void }) {
   );
 }
 
-function ToolFooter({ onCancel }: { onCancel: () => void }) {
+function ToolFooter({ onCancel, onSave }: { onCancel: () => void; onSave?: () => void }) {
   return (
     <div className="shrink-0 bg-surface px-6 pb-8 pt-4">
       <div className="flex items-center gap-2">
@@ -2486,6 +2579,7 @@ function ToolFooter({ onCancel }: { onCancel: () => void }) {
           Cancel
         </button>
         <button
+          onClick={onSave}
           style={{ backgroundColor: SAVE_GREEN }}
           className="h-10 flex-1 rounded-lg text-[14px] font-semibold text-white transition hover:brightness-95"
         >
