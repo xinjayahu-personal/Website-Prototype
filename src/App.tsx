@@ -438,7 +438,7 @@ function LandingPanel({ onOpen }: {
         />
         <SidebarLink
           icon={iconNav}
-          title="Navigation menu"
+          title="Header and footer"
           desc="Adjust the feature link and text"
           onClick={() => onOpen("navigation")}
         />
@@ -2539,7 +2539,7 @@ type ToolViewKey = "seo" | "receptionist" | "navigation" | "brand";
 const TOOL_TITLES: Record<ToolViewKey, string> = {
   seo: "SEO and Discovery",
   receptionist: "Receptionist Chat",
-  navigation: "Navigation Menu",
+  navigation: "Header and footer",
   brand: "Update your brand look",
 };
 
